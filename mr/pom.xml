@@ -57,7 +57,7 @@
             <phase>package</phase>
             <configuration>
               <tasks>
-                <copy file="target/mahout-mr-${version}.jar" tofile="../mahout-mr-${version}.jar" />
+                <copy file="target/mahout-mr-${project.version}.jar" tofile="../mahout-mr-${project.version}.jar" />
               </tasks>
             </configuration>
             <goals>
@@ -272,6 +272,12 @@
       <groupId>org.apache.solr</groupId>
       <artifactId>solr-commons-csv</artifactId>
       <version>3.5.0</version>
+    </dependency>
+    
+    <dependency>
+      <groupId>net.sf.trove4j</groupId>
+      <artifactId>trove4j</artifactId>
+      <version>3.0.3</version>
     </dependency>
 
   </dependencies>
