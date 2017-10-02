@@ -222,7 +222,7 @@ abstract class AbstractSimilarity extends AbstractItemSimilarity implements User
   }
   
   @Override
-  public final double itemSimilarity(long itemID1, long itemID2) throws TasteException {
+  public double itemSimilarity(long itemID1, long itemID2) throws TasteException {
     DataModel dataModel = getDataModel();
     PreferenceArray xPrefs = dataModel.getPreferencesForItem(itemID1);
     PreferenceArray yPrefs = dataModel.getPreferencesForItem(itemID2);
