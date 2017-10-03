@@ -4,7 +4,8 @@ import org.apache.mahout.cf.taste.common.TasteException;
 import org.apache.mahout.cf.taste.common.Weighting;
 import org.apache.mahout.cf.taste.model.DataModel;
 import org.apache.mahout.cf.taste.model.PreferenceArray;
-import org.apache.mahout.cf.taste.impl.common.CountMinSketch;
+import org.apache.mahout.cf.taste.impl.common.AbstractCountMinSketch;
+import org.apache.mahout.cf.taste.impl.common.DoubleCountMinSketch;
 
 import com.google.common.base.Preconditions;
 
@@ -59,14 +60,14 @@ public final class CosineCM extends AbstractSimilarity {
     long xIndex, yIndex;
     double x, y;
     
-    CountMinSketch cm1, cm2;
+    DoubleCountMinSketch cm1, cm2;
     
     try{
       
-      cm1 = new CountMinSketch(delta, epsilon);
-      cm2 = new CountMinSketch(delta, epsilon);
+      cm1 = new DoubleCountMinSketch(delta, epsilon);
+      cm2 = new DoubleCountMinSketch(delta, epsilon);
       
-    } catch(CountMinSketch.CMException ex) {
+    } catch(AbstractCountMinSketch.CMException ex) {
       throw new TasteException("CountMinSketch error:" + ex.getMessage());
     }
     
@@ -85,7 +86,7 @@ public final class CosineCM extends AbstractSimilarity {
       }
     }
     
-    double result = CountMinSketch.cosine(cm1, cm2);
+    double result = DoubleCountMinSketch.cosine(cm1, cm2);
     int count = xLength > yLength ? yLength : xLength; // Set minimum, but not important I think
     
     if (!Double.isNaN(result)) {
@@ -111,14 +112,14 @@ public final class CosineCM extends AbstractSimilarity {
     long xIndex, yIndex;
     double x, y;
     
-    CountMinSketch cm1, cm2;
+    DoubleCountMinSketch cm1, cm2;
     
     try{
       
-      cm1 = new CountMinSketch(delta, epsilon);
-      cm2 = new CountMinSketch(delta, epsilon);
+      cm1 = new DoubleCountMinSketch(delta, epsilon);
+      cm2 = new DoubleCountMinSketch(delta, epsilon);
       
-    } catch(CountMinSketch.CMException ex) {
+    } catch(AbstractCountMinSketch.CMException ex) {
       throw new TasteException("CountMinSketch error:" + ex.getMessage());
     }
     
@@ -137,7 +138,7 @@ public final class CosineCM extends AbstractSimilarity {
       }
     }
     
-    double result = CountMinSketch.cosine(cm1, cm2);
+    double result = DoubleCountMinSketch.cosine(cm1, cm2);
     int count = xLength > yLength ? yLength : xLength; // Set minimum, but not important I think
     
     if (!Double.isNaN(result)) {
