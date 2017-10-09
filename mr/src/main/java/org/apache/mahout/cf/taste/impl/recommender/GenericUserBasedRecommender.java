@@ -33,6 +33,8 @@ import org.apache.mahout.cf.taste.recommender.RecommendedItem;
 import org.apache.mahout.cf.taste.recommender.Rescorer;
 import org.apache.mahout.cf.taste.recommender.UserBasedRecommender;
 import org.apache.mahout.cf.taste.similarity.UserSimilarity;
+import org.apache.mahout.cf.taste.impl.similarity.CosineCM;
+import org.apache.mahout.cf.taste.impl.common.DoubleCountMinSketch;
 import org.apache.mahout.common.LongPair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -133,6 +135,12 @@ public class GenericUserBasedRecommender extends AbstractRecommender implements 
     if (theNeighborhood.length == 0) {
       return Float.NaN;
     }
+    
+    CosineCM sim = null;
+    if (similarity instanceof CosineCM) {
+      sim = (CosineCM) similarity;
+    }
+    
     DataModel dataModel = getDataModel();
     double preference = 0.0;
     double totalSimilarity = 0.0;
@@ -140,7 +148,15 @@ public class GenericUserBasedRecommender extends AbstractRecommender implements 
     for (long userID : theNeighborhood) {
       if (userID != theUserID) {
         // See GenericItemBasedRecommender.doEstimatePreference() too
-        Float pref = dataModel.getPreferenceValue(userID, itemID);
+        
+        Float pref = null;
+        if (sim == null) {
+          pref = dataModel.getPreferenceValue(userID, itemID);
+        } else { // Use point query result
+          DoubleCountMinSketch cm = sim.exportCMProfile(userID);
+          pref = (float) cm.get(itemID);
+        }
+        
         if (pref != null) {
           double theSimilarity = similarity.userSimilarity(theUserID, userID);
           if (!Double.isNaN(theSimilarity)) {
