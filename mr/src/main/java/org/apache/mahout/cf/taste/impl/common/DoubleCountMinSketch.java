@@ -19,6 +19,20 @@ public class DoubleCountMinSketch extends AbstractCountMinSketch {
   private static final Logger log = LoggerFactory.getLogger(DoubleCountMinSketch.class);
   
   private final TDoubleArrayList count;
+  
+  /** Setup a new count-min sketch with parameters w and d
+   * The parameters w and d control the accuracy of the estimates of the sketch
+   * 
+   * @param w   Width
+   * @param d   Depth
+   * 
+   * @throws  CountMinSketch.CMException  If delta or epsilon are not in the unit interval
+   */
+  public DoubleCountMinSketch(int width, int depth) throws CMException {
+    super(width, depth);
+    count = new TDoubleArrayList(w * d);
+    for (int i = 0; i < w * d; i++) { count.insert(i, 0); }
+  }
 
   /** Setup a new count-min sketch with parameters delta, epsilon, and k
    * The parameters delta,epsilon and k control the accuracy of the estimates of the sketch
@@ -33,6 +47,7 @@ public class DoubleCountMinSketch extends AbstractCountMinSketch {
     count = new TDoubleArrayList(w * d);
     for (int i = 0; i < w * d; i++) { count.insert(i, 0); }
   }
+  
   
   /** Returns the value in a given cell of the sketch
    * 
@@ -53,6 +68,7 @@ public class DoubleCountMinSketch extends AbstractCountMinSketch {
    * 
    */
   public void update(long key, double increment) {
+    insertedKeys.add(key);
     for (int i = 0; i < d; i++) {
       int j = hashFunctions[i].hash(key);
       double value = get(i, j);

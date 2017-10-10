@@ -53,6 +53,7 @@ public class LongCountMinSketch extends AbstractCountMinSketch {
    * 
    */
   public void update(long key, long increment) {
+    insertedKeys.add(key);
     for (int i = 0; i < d; i++) {
       int j = hashFunctions[i].hash(key);
       long value = get(i, j);
