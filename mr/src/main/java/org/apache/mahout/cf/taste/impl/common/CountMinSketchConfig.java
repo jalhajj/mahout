@@ -17,17 +17,19 @@ public class CountMinSketchConfig {
   private static final Logger log = LoggerFactory.getLogger(CountMinSketchConfig.class);
   
   private int MAX_WIDTH = 1000;
-  private int DEPTH = 11;
+  
   
   private double delta = 0;
   private double epsilon = 0;
   
   private final double gamma; // Deniability wished
   private final double error; // Error bound wished
+  private int DEPTH;          // Depth
   
-  public CountMinSketchConfig(double g, double e) {
+  public CountMinSketchConfig(double g, double e, int d) {
     gamma = g;
     error = e;
+    DEPTH = d;
   }
   
   /** Configure the count-min sketch delta and epsilon parameters
@@ -38,13 +40,16 @@ public class CountMinSketchConfig {
    */
   public void configure(DataModel dataModel) throws TasteException {
     
-    int width = Integer.MAX_VALUE;
+    int width = 0;
     LongPrimitiveIterator it = dataModel.getUserIDs();
     while (it.hasNext()) {
       long userID = it.next();
       int w = getWidthForError(dataModel, userID, getWidthForDeniability(dataModel, userID));
       width = Math.max(width, w);
+      log.debug("Width {} chosen for user {}, current max width is {}", w, userID, width);
     }
+    
+    log.debug("Width chosen is {}, now check if error is still ok", width);
     
     // Check if the width chosen is ok for error on all users
     it = dataModel.getUserIDs();
@@ -113,6 +118,8 @@ public class CountMinSketchConfig {
         double y = cm.get(index);
         double e = Math.abs(x - y) / x;
         maxError = Math.max(maxError, e);
+        log.debug("For width {}, user {}, item {}, real rating is {} and point query returns {}: error is {}, max error for this user is {}",
+                  width, userID, index, x, y, e, maxError);
       }
       return maxError;
       
@@ -129,13 +136,15 @@ public class CountMinSketchConfig {
     double currentGamma;
     do {
       currentWidth = currentWidth / 2;
+      if (currentWidth == 1) {
+        throw new TasteException("Not possible to meet deniability condition");
+      }
       currentGamma = gammaDeniability(dataModel.getNumItems(), dataModel.getPreferencesFromUser(userID).length(),
                                       currentWidth, DEPTH);
+      log.debug("For width {} and user {} ({} items in profile among {} items), deniability is {} while required one is {}",
+                currentWidth, userID, dataModel.getPreferencesFromUser(userID).length(), dataModel.getNumItems(),
+                currentGamma, gamma);
     } while (currentGamma < gamma);
-    
-    if (currentWidth == 1) {
-      throw new TasteException("Not possible to meet deniability condition");
-    }
     
     return currentWidth;
       
@@ -148,13 +157,13 @@ public class CountMinSketchConfig {
     double currentMaxError;
     do {
       currentWidth++;
+      if (currentWidth > maxWidth) {
+        throw new TasteException("Not possible to meet error condition");
+      }
       currentMaxError = computeError(dataModel, userID, currentWidth);
-      
-    } while (currentMaxError > error && currentWidth < maxWidth);
-    
-    if (currentWidth == maxWidth) {
-      throw new TasteException("Not possible to meet error condition");
-    }
+      log.debug("For width {} and user {}, max error is {}, required is {}",
+                currentWidth, userID, currentMaxError, error);
+    } while (currentMaxError > error);
     
     return currentWidth;
       
