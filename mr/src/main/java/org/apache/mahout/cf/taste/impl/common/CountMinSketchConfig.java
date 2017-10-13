@@ -1,6 +1,13 @@
 package org.apache.mahout.cf.taste.impl.common;
 
 import java.lang.Math;
+import java.lang.ClassNotFoundException;
+import java.io.Serializable;
+import java.io.IOException;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 
 import org.apache.mahout.cf.taste.common.TasteException;
 import org.apache.mahout.cf.taste.impl.common.AbstractCountMinSketch;
@@ -12,24 +19,37 @@ import org.apache.mahout.cf.taste.model.PreferenceArray;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class CountMinSketchConfig {
+import org.apache.commons.lang3.StringUtils;
+
+public class CountMinSketchConfig implements Serializable {
   
-  private static final Logger log = LoggerFactory.getLogger(CountMinSketchConfig.class);
+  private static final transient Logger log = LoggerFactory.getLogger(CountMinSketchConfig.class);
   
-  private int MAX_WIDTH = 1000;
+  private transient int MAX_WIDTH = 1000;
   
-  
-  private double delta = 0;
-  private double epsilon = 0;
+  private EDResult result;
   
   private final double gamma; // Deniability wished
   private final double error; // Error bound wished
   private int DEPTH;          // Depth
   
+  class EDResult implements Serializable {
+    
+    private final double delta;
+    private final double epsilon;
+    
+    EDResult(double d, double e) {
+      delta = d;
+      epsilon = e;
+    }
+    
+  }
+  
   public CountMinSketchConfig(double g, double e, int d) {
     gamma = g;
     error = e;
     DEPTH = d;
+    result = null;
   }
   
   /** Configure the count-min sketch delta and epsilon parameters
@@ -38,7 +58,46 @@ public class CountMinSketchConfig {
    * 
    *  Must be called before getDelta() and getEpsilon()
    */
-  public void configure(DataModel dataModel) throws TasteException {
+  public void configure(DataModel dataModel, String datasetPath) throws TasteException {
+    String datasetName = StringUtils.substringBefore(datasetPath.replace("/", "-"), ".");
+    String path = "ser/" + datasetName + "_gamma_" + gamma + "_error_" + error + "_depth_" + DEPTH + ".ser";
+    log.info("Try to find {} file, check if already computed", path);
+    try {
+      // Check if already made in a previous experiment
+      FileInputStream fileIn = new FileInputStream(path);
+      ObjectInputStream in = new ObjectInputStream(fileIn);
+      // If so, retrieve result
+      result = (EDResult) in.readObject();
+      log.info("Found file, already computed, retrieved results delta={} and epsilon={}",
+                getDelta(), getEpsilon());
+      in.close();
+      fileIn.close();
+    } catch(IOException ex) {
+      // If not, compute and save the result for next time
+      log.info("Found nothing, let's compute then");
+      computeConfig(dataModel);
+      save(path);
+    } catch(ClassNotFoundException ex) {
+      log.error("ClassNotFoundException: {}", ex.getMessage());
+    }
+    
+  }
+  
+  private void save(String path) {
+    try {
+      FileOutputStream fileOut = new FileOutputStream(path);
+      ObjectOutputStream out = new ObjectOutputStream(fileOut);
+      out.writeObject(result);
+      log.info("Result saved for future experiments");
+      out.close();
+      fileOut.close();
+    } catch(IOException ex) {
+      log.error("IOException: {}", ex.getMessage());
+    }
+  }
+    
+    
+  private void computeConfig(DataModel dataModel) throws TasteException {
     
     int width = 0;
     LongPrimitiveIterator it = dataModel.getUserIDs();
@@ -62,8 +121,9 @@ public class CountMinSketchConfig {
       }
     }
     
-    epsilon = Math.exp(1) / (double) width;
-    delta = Math.exp(- (double) DEPTH);
+    double epsilon = Math.exp(1) / (double) width;
+    double delta = Math.exp(- (double) DEPTH);
+    result = new EDResult(delta, epsilon);
     log.info("Parameters chosen: width {} (epsilon {}), depth {} (delta {})",
               width, epsilon, DEPTH, delta);
   }
@@ -173,20 +233,20 @@ public class CountMinSketchConfig {
    * @return  delta parameter
    */
   public double getDelta() throws TasteException {
-    if (delta == 0) {
+    if (result == null) {
       throw new TasteException("delta is null, call configure method first");
     } else
-    return delta;
+    return result.delta;
   }
   
   /** Return epsilon parameter
    * @return  epsilon parameter
    */
   public double getEpsilon() throws TasteException {
-    if (epsilon == 0) {
+    if (result == null) {
       throw new TasteException("epsilon is null, call configure method first");
     } else
-    return epsilon;
+    return result.epsilon;
   }
   
   
