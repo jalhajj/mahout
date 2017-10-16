@@ -25,7 +25,7 @@ public class CountMinSketchConfig implements Serializable {
   
   private static final transient Logger log = LoggerFactory.getLogger(CountMinSketchConfig.class);
   
-  private transient int MAX_WIDTH = 1000;
+  private transient int MAX_WIDTH = 100000;
   
   private EDResult result;
   

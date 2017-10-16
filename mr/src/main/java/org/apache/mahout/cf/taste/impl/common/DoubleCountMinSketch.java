@@ -102,7 +102,6 @@ public class DoubleCountMinSketch extends AbstractCountMinSketch {
   
   /** Computes an approximate cosine between two count-min sketches
    *  The two count-min sketches must have the same size
-   *  The value returned can be > 1
    * 
    * @param a   Count-min sketch (epsilon, delta)
    * @param b   Count-min sketch (epsilon, delta)
@@ -116,9 +115,8 @@ public class DoubleCountMinSketch extends AbstractCountMinSketch {
     Preconditions.checkArgument(a.w == b.w, "Widths of a (%s) and b (%s) must be the same", a.w, b.w);
     Preconditions.checkArgument(a.d == b.d, "Depths of a (%s) and b (%s) must be the same", a.d, b.d);
     
-    double sumA = Double.MAX_VALUE;
-    double sumB = Double.MAX_VALUE;
-    double sumAB = Double.MAX_VALUE;
+    double minCosine = Double.MAX_VALUE;
+    double currentCosine = 0;
     
     for (int i = 0; i < a.d; i++) {
       
@@ -134,17 +132,18 @@ public class DoubleCountMinSketch extends AbstractCountMinSketch {
         valueAB += xa * xb;
       }
       
-      if (valueA < sumA) { sumA = valueA; }
-      if (valueB < sumB) { sumB = valueB; }
-      if (valueAB < sumAB) { sumAB = valueAB; }
+      double denominator = Math.sqrt(valueA) * Math.sqrt(valueB);
+      if (denominator != 0) {
+        currentCosine = valueAB / denominator;
+        minCosine = Math.min(minCosine, currentCosine);
+      }
       
     }
     
-    log.debug("Norm^2 of a is {}, norm^2 of b is {}, inner product is {}", sumA, sumB, sumAB);
+    log.debug("Cosine is {}", minCosine);
     
-    double denominator = Math.sqrt(sumA) * Math.sqrt(sumB);
-    if (denominator == 0) { return Double.NaN; }
-    return sumAB / denominator;
+    if (minCosine == Double.MAX_VALUE) { return Double.NaN; }
+    return minCosine;
   }
   
   
