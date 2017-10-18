@@ -155,6 +155,7 @@ public class GenericUserBasedRecommender extends AbstractRecommender implements 
         } else { // Use point query result
           DoubleCountMinSketch cm = sim.exportCMProfile(userID);
           pref = (float) cm.get(itemID);
+          if (pref == 0.0) { pref = null; }
         }
         
         if (pref != null) {
