@@ -25,16 +25,17 @@ public class CountMinSketchConfig implements Serializable {
   
   private static final transient Logger log = LoggerFactory.getLogger(CountMinSketchConfig.class);
   
-  private transient int MAX_WIDTH = 100000;
-  
-  private EDResult result;
+  private transient int MAX_WIDTH = 10000;
+  private transient int MAX_DEPTH = 25;
   
   private final double gamma; // Deniability wished
   private final double error; // Error bound wished
-  private int DEPTH;          // Depth
+  private EDResult result;
   
+  
+  /** Class to serialize the result of the computation */
   class EDResult implements Serializable {
-    
+
     private final double delta;
     private final double epsilon;
     
@@ -45,35 +46,45 @@ public class CountMinSketchConfig implements Serializable {
     
   }
   
-  public CountMinSketchConfig(double g, double e, int d) {
+  
+  /**
+   *  @param    g   gamma-deniability condition value
+   *  @param    e   Error bound value
+   */
+  public CountMinSketchConfig(double g, double e) {
     gamma = g;
     error = e;
-    DEPTH = d;
     result = null;
   }
   
+  
   /** Configure the count-min sketch delta and epsilon parameters
-   *  to ensure a given level of deniability and to ensure that
-   *  a bound is met on the point-query error
+   *  to ensure a given level of deniability and to ensure a
+   *  probabilistic error bound on the accuracy
    * 
    *  Must be called before getDelta() and getEpsilon()
+   * 
+   *  @param  dataModel     Dataset
+   *  @param  datasetPath   Path of the dataset file, used as dataset
+   *                        identifier for serialization
+   * 
+   *  @throws TasteException 
    */
   public void configure(DataModel dataModel, String datasetPath) throws TasteException {
     String datasetName = StringUtils.substringBefore(datasetPath.replace("/", "-"), ".");
-    String path = "ser/" + datasetName + "_gamma_" + gamma + "_error_" + error + "_depth_" + DEPTH + ".ser";
+    String path = "ser/" + datasetName + "_gamma_" + gamma + "_error_" + error + ".ser";
     log.info("Try to find {} file, check if already computed", path);
     try {
-      // Check if already made in a previous experiment
+      /* Check if computation was already serialized in a previous run */
       FileInputStream fileIn = new FileInputStream(path);
       ObjectInputStream in = new ObjectInputStream(fileIn);
-      // If so, retrieve result
-      result = (EDResult) in.readObject();
+      result = (EDResult) in.readObject(); // If found, retrieve the result
       log.info("Found file, already computed, retrieved results delta={} and epsilon={}",
                 getDelta(), getEpsilon());
       in.close();
       fileIn.close();
     } catch(IOException ex) {
-      // If not, compute and save the result for next time
+      /* If not found, compute and save the result for next time */
       log.info("Found nothing, let's compute then");
       computeConfig(dataModel);
       save(path);
@@ -83,6 +94,11 @@ public class CountMinSketchConfig implements Serializable {
     
   }
   
+  
+  /** Serialize the result of the configuration
+   * 
+   *  @param  path  name of the file where to save the result
+   */
   private void save(String path) {
     try {
       FileOutputStream fileOut = new FileOutputStream(path);
@@ -96,46 +112,46 @@ public class CountMinSketchConfig implements Serializable {
     }
   }
     
-    
+  
+  /** Compute epsilon and delta to meet the conditions required
+   *  
+   *  @throws TasteException    If not possible to meet the conditions
+   */ 
   private void computeConfig(DataModel dataModel) throws TasteException {
     
-    int width = 0;
+    int width = 0, depth = 0;
     LongPrimitiveIterator it = dataModel.getUserIDs();
+    
+    /* NOTE: For now, consider all users, but in the future, we may want to not
+     * bother about those with huge profiles. For instance, the width chosen
+     * could double because of ONE user..
+     */
     while (it.hasNext()) {
       long userID = it.next();
-      int w = getWidthForError(dataModel, userID, getWidthForDeniability(dataModel, userID));
-      width = Math.max(width, w);
-      log.debug("Width {} chosen for user {}, current max width is {}", w, userID, width);
-    }
-    
-    log.debug("Width chosen is {}, now check if error is still ok", width);
-    
-    // Check if the width chosen is ok for error on all users
-    it = dataModel.getUserIDs();
-    while (it.hasNext()) {
-      long userID = it.next();
-      double e = computeError(dataModel, userID, width);
-      if (e > error) {
-        log.warn("Error for user {} is required to be < to {} but is {} with width chosen {}",
-                  userID, error, e, width);
+      int w = getWidthForError(dataModel, userID);
+      if (w > width) {
+        width = w;
+        depth = getDepthForDeniability(dataModel, userID, w);
       }
     }
     
+    /* Compute the chosen parameters */
     double epsilon = Math.exp(1) / (double) width;
-    double delta = Math.exp(- (double) DEPTH);
+    double delta = Math.exp(- (double) depth);
     result = new EDResult(delta, epsilon);
-    log.info("Parameters chosen: width {} (epsilon {}), depth {} (delta {})",
-              width, epsilon, DEPTH, delta);
+    log.info("Parameters chosen: width={} (epsilon={}), depth={} (delta={})",
+              width, epsilon, depth, delta);
   }
   
-  /** Compute gamma-deniability thanks to the approximation formula
+  
+  /** Compute gamma-deniability with the approximation formula
    * 
-   * @param   u   total number of keys
-   * @param   n   number of keys inserted in the sketch
-   * @param   w   width of the sketch
-   * @param   d   depth of the sketch
+   * @param   u   Total number of keys
+   * @param   n   Number of keys inserted in the sketch
+   * @param   w   Width of the sketch
+   * @param   d   Depth of the sketch
    * 
-   * @return  gamma-deniability
+   * @return  gamma-deniability value
    */
   private double gammaDeniability(int u, int n, int w, int d) {
     double U = (double) u;
@@ -150,87 +166,104 @@ public class CountMinSketchConfig implements Serializable {
     return Math.pow(q, D);
   }
   
-  /** Compute the error for a given width
-   *  
-   * @return  max error over all items where error for one item
-   *          is computed as :
-   *          | real value - point query value | / real value
+  
+  /** Get the maximum depth to ensure a given deniability for a given user
+   * 
+   *  @param  width   width of the count-min sketch
+   * 
+   *  @return   maximum depth <= MAX_DEPTH that ensures the deniability condition is met
+   * 
+   *  @throws TasteException    If not possible to meet the condition
    */
-  private double computeError(DataModel dataModel, long userID, int width) throws TasteException {
+  private int getDepthForDeniability(DataModel dataModel, long userID, int width) throws TasteException {
     
-    try {
-      
-      // Create the CM and insert items
-      DoubleCountMinSketch cm = new DoubleCountMinSketch(width, DEPTH);
-      PreferenceArray prefs = dataModel.getPreferencesFromUser(userID);
-      int length = prefs.length();
-      for (int i = 0; i < length; i++) {
-        long index = prefs.getItemID(i);
-        double x = prefs.getValue(i);
-        cm.update(index, x);
-      }
-      
-      // Compute error
-      double maxError = 0;
-      for (int i = 0; i < length; i++) {
-        long index = prefs.getItemID(i);
-        double x = prefs.getValue(i);
-        double y = cm.get(index);
-        double e = Math.abs(x - y) / x;
-        maxError = Math.max(maxError, e);
-        log.debug("For width {}, user {}, item {}, real rating is {} and point query returns {}: error is {}, max error for this user is {}",
-                  width, userID, index, x, y, e, maxError);
-      }
-      return maxError;
-      
-    } catch(AbstractCountMinSketch.CMException ex) {
-      throw new TasteException("CountMinSketch error:" + ex.getMessage());
+    int I = dataModel.getNumItems();
+    int n = dataModel.getPreferencesFromUser(userID).length();
+    double currentDen;
+    int currentDepth;
+    int da = 1, db = MAX_DEPTH;
+    
+    /* Check if min depth is small enough to find a solution, not possible otherwise */
+    currentDen = gammaDeniability(I, n, width, da);
+    if (currentDen < gamma) {
+      String msg = String.format("Not possible to meet gamma >= %g condition with width=%d, would require a depth lower than %d",
+                                error, width, da);
+      throw new TasteException(msg);
     }
     
+    /* Start binary search */
+    while (da < (db - 1)) {
+      log.debug("For user {} and deniability, search between {} and {}", userID, da, db);
+      currentDepth = (da + db) / 2;
+      currentDen = gammaDeniability(I, n, width, da);
+      if (currentDen < gamma) {
+        db = currentDepth;
+      } else {
+        da = currentDepth;
+      }
+    }
+    log.debug("For user {}, gamma={} and width={}, depth selected to meet deniability condition is {}",
+              userID, gamma, width, da);
+    return da;
   }
   
-  /** Get the width required to ensure a given deniability */
-  private int getWidthForDeniability(DataModel dataModel, long userID) throws TasteException {
-    
-    int currentWidth = 2 * MAX_WIDTH;
-    double currentGamma;
-    do {
-      currentWidth = currentWidth / 2;
-      if (currentWidth == 1) {
-        throw new TasteException("Not possible to meet deniability condition");
-      }
-      currentGamma = gammaDeniability(dataModel.getNumItems(), dataModel.getPreferencesFromUser(userID).length(),
-                                      currentWidth, DEPTH);
-      log.debug("For width {} and user {} ({} items in profile among {} items), deniability is {} while required one is {}",
-                currentWidth, userID, dataModel.getPreferencesFromUser(userID).length(), dataModel.getNumItems(),
-                currentGamma, gamma);
-    } while (currentGamma < gamma);
-    
-    return currentWidth;
-      
+  
+  /** Compute the expected value for the percentage of collisions in a row
+   * 
+   *  @param  width   width of the count-min sketch
+   *  @param  nb      number of elements inserted
+   * 
+   *  @return   expected percentage of collisions in a row
+   */
+  private double expectedPercentageColisions(int width, int nb) {
+    double w = (double) width;
+    double n = (double) nb;
+    return (n - w * (1 - Math.pow(1 - 1 / w, n))) / n;
   }
   
-  /** Get the width to ensure a given error bound is met */
-  private int getWidthForError(DataModel dataModel, long userID, int maxWidth) throws TasteException {
+  
+  /** Get the width to ensure a given error bound is met for a given user
+   * 
+   *  @return   minimum width to ensure the error condition is met
+   * 
+   *  @throws TasteException    If not possible to meet the condition
+   */
+  private int getWidthForError(DataModel dataModel, long userID) throws TasteException {
     
-    int currentWidth = 0;
-    double currentMaxError;
-    do {
-      currentWidth++;
-      if (currentWidth > maxWidth) {
-        throw new TasteException("Not possible to meet error condition");
+    int n = dataModel.getPreferencesFromUser(userID).length();
+    double currentError;
+    int currentWidth;
+    int wa = 1, wb = MAX_WIDTH;
+    
+    /* Check if max width is big enough to find a solution, not possible otherwise */
+    currentError = expectedPercentageColisions(wb, n);
+    if (currentError < error) {
+      String msg = String.format("Not possible to meet error <= %g condition, would require a width greater than %d",
+                                error, wb);
+      throw new TasteException(msg);
+    }
+    
+    /* Start binary search */
+    while (wa < (wb - 1)) {
+      log.debug("For user {} and cosine error, search between {} and {}", userID, wa, wb);
+      currentWidth = (wa + wb) / 2;
+      currentError = expectedPercentageColisions(currentWidth, n);
+      if (currentError > error) {
+        wa = currentWidth;
+      } else {
+        wb = currentWidth;
       }
-      currentMaxError = computeError(dataModel, userID, currentWidth);
-      log.debug("For width {} and user {}, max error is {}, required is {}",
-                currentWidth, userID, currentMaxError, error);
-    } while (currentMaxError > error);
-    
-    return currentWidth;
-      
+    }
+    log.debug("For user {} and error={}, width selected to meet error condition is {}", userID, error, wb);
+    return wb;
   }
+  
   
   /** Return delta parameter
+   * 
    * @return  delta parameter
+   * 
+   * @throws  TasteException    If configure method was not called first
    */
   public double getDelta() throws TasteException {
     if (result == null) {
@@ -239,8 +272,12 @@ public class CountMinSketchConfig implements Serializable {
     return result.delta;
   }
   
+  
   /** Return epsilon parameter
+   * 
    * @return  epsilon parameter
+   * 
+   * @throws  TasteException    If configure method was not called first
    */
   public double getEpsilon() throws TasteException {
     if (result == null) {
