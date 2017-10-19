@@ -29,7 +29,8 @@ public class CountMinSketchConfig implements Serializable {
   private transient int MAX_DEPTH = 25;
   
   private final double gamma; // Deniability wished
-  private final double error; // Error bound wished
+  private final double betaC; // Error bound wished for cosine query
+  private final double betaP; // Error bound wished for point query
   private EDResult result;
   
   
@@ -51,9 +52,10 @@ public class CountMinSketchConfig implements Serializable {
    *  @param    g   gamma-deniability condition value
    *  @param    e   Error bound value
    */
-  public CountMinSketchConfig(double g, double e) {
+  public CountMinSketchConfig(double g, double bc, double bp) {
     gamma = g;
-    error = e;
+    betaC = bc;
+    betaP = bp;
     result = null;
   }
   
@@ -72,7 +74,7 @@ public class CountMinSketchConfig implements Serializable {
    */
   public void configure(DataModel dataModel, String datasetPath) throws TasteException {
     String datasetName = StringUtils.substringBefore(datasetPath.replace("/", "-"), ".");
-    String path = "ser/" + datasetName + "_gamma_" + gamma + "_error_" + error + ".ser";
+    String path = "ser/" + datasetName + "_gamma_" + gamma + "_betaC_" + betaC + "_betaP_" + betaP + ".ser";
     log.info("Try to find {} file, check if already computed", path);
     try {
       /* Check if computation was already serialized in a previous run */
@@ -119,28 +121,50 @@ public class CountMinSketchConfig implements Serializable {
    */ 
   private void computeConfig(DataModel dataModel) throws TasteException {
     
-    int width = 0, depth = 0;
     LongPrimitiveIterator it = dataModel.getUserIDs();
+    int n = 0;
+    int I = dataModel.getNumItems();
     
     /* NOTE: For now, consider all users, but in the future, we may want to not
      * bother about those with huge profiles. For instance, the width chosen
      * could double because of ONE user..
      */
+    /* Find the maximum number of items in a user profile */
     while (it.hasNext()) {
       long userID = it.next();
-      int w = getWidthForError(dataModel, userID);
-      if (w > width) {
-        width = w;
-        depth = getDepthForDeniability(dataModel, userID, w);
+      int profileSize = dataModel.getPreferencesFromUser(userID).length();
+      n = Math.max(n, profileSize);
+    }
+    
+    /* Try to find a solution with branch and bound / binary search techniques */
+    int minWidth = getWidthForCosineError(n);
+    Integer minDepth = 1;
+    int w;
+    for (w = minWidth; w < MAX_WIDTH; w++) {
+      minDepth = getDepthForPointError(w, n);
+      if (minDepth == null) {
+        continue;
+      } else {
+        minDepth = getDepthForDeniability(I, n, w, minDepth);
+        if (minDepth == null) {
+          continue;
+        } else {
+          break;
+        }
       }
     }
     
+    /* Check if a solution was found */
+    if (w == MAX_WIDTH) {
+      throw new TasteException("Not possible to meet conditions, try with different parameters");
+    }
+    
     /* Compute the chosen parameters */
-    double epsilon = Math.exp(1) / (double) width;
-    double delta = Math.exp(- (double) depth);
+    double epsilon = Math.exp(1) / (double) minWidth;
+    double delta = Math.exp(- (double) minDepth);
     result = new EDResult(delta, epsilon);
     log.info("Parameters chosen: width={} (epsilon={}), depth={} (delta={})",
-              width, epsilon, depth, delta);
+              minWidth, epsilon, minDepth, delta);
   }
   
   
@@ -169,31 +193,31 @@ public class CountMinSketchConfig implements Serializable {
   
   /** Get the maximum depth to ensure a given deniability for a given user
    * 
-   *  @param  width   width of the count-min sketch
+   *  @param  I         Total number of items
+   *  @param  n         Maximum number of keys to insert in a sketch
+   *  @param  width     Width of the count-min sketch
+   *  @param  minDepth  Minimum value required for the depth
    * 
-   *  @return   maximum depth <= MAX_DEPTH that ensures the deniability condition is met
+   *  @return   Minimum depth >= minDepth that ensures the deniability condition is met
+   *            or null if not possible
    * 
    *  @throws TasteException    If not possible to meet the condition
    */
-  private int getDepthForDeniability(DataModel dataModel, long userID, int width) throws TasteException {
+  private Integer getDepthForDeniability(int I, int n, int width, int minDepth) throws TasteException {
     
-    int I = dataModel.getNumItems();
-    int n = dataModel.getPreferencesFromUser(userID).length();
     double currentDen;
     int currentDepth;
-    int da = 1, db = MAX_DEPTH;
+    int da = minDepth, db = MAX_DEPTH;
     
     /* Check if min depth is small enough to find a solution, not possible otherwise */
     currentDen = gammaDeniability(I, n, width, da);
     if (currentDen < gamma) {
-      String msg = String.format("Not possible to meet gamma >= %g condition with width=%d, would require a depth lower than %d",
-                                error, width, da);
-      throw new TasteException(msg);
+      return null;
     }
     
     /* Start binary search */
     while (da < (db - 1)) {
-      log.debug("For user {} and deniability, search between {} and {}", userID, da, db);
+      log.debug("For deniability, search between {} and {}", da, db);
       currentDepth = (da + db) / 2;
       currentDen = gammaDeniability(I, n, width, da);
       if (currentDen < gamma) {
@@ -202,9 +226,8 @@ public class CountMinSketchConfig implements Serializable {
         da = currentDepth;
       }
     }
-    log.debug("For user {}, gamma={} and width={}, depth selected to meet deniability condition is {}",
-              userID, gamma, width, da);
-    return da;
+    log.debug("For gamma={} and width={}, depth selected to meet deniability condition is {}", gamma, width, da);
+    return new Integer(da);
   }
   
   
@@ -224,38 +247,93 @@ public class CountMinSketchConfig implements Serializable {
   
   /** Get the width to ensure a given error bound is met for a given user
    * 
-   *  @return   minimum width to ensure the error condition is met
+   *  @param    n   Maximum number of keys to insert in a sketch
+   * 
+   *  @return   Minimum width to ensure the error condition for cosine query is met
    * 
    *  @throws TasteException    If not possible to meet the condition
    */
-  private int getWidthForError(DataModel dataModel, long userID) throws TasteException {
+  private int getWidthForCosineError(int n) throws TasteException {
     
-    int n = dataModel.getPreferencesFromUser(userID).length();
     double currentError;
     int currentWidth;
     int wa = 1, wb = MAX_WIDTH;
     
     /* Check if max width is big enough to find a solution, not possible otherwise */
     currentError = expectedPercentageColisions(wb, n);
-    if (currentError < error) {
-      String msg = String.format("Not possible to meet error <= %g condition, would require a width greater than %d",
-                                error, wb);
+    if (currentError > betaC) {
+      String msg = String.format("Not possible to meet cosine error <= %g condition, would require a width greater than %d",
+                                betaC, wb);
       throw new TasteException(msg);
     }
     
     /* Start binary search */
     while (wa < (wb - 1)) {
-      log.debug("For user {} and cosine error, search between {} and {}", userID, wa, wb);
+      log.debug("For cosine error, search between {} and {}", wa, wb);
       currentWidth = (wa + wb) / 2;
       currentError = expectedPercentageColisions(currentWidth, n);
-      if (currentError > error) {
+      if (currentError > betaC) {
         wa = currentWidth;
       } else {
         wb = currentWidth;
       }
     }
-    log.debug("For user {} and error={}, width selected to meet error condition is {}", userID, error, wb);
+    log.debug("For cosine error={}, width selected to meet condition is {}", betaC, wb);
     return wb;
+  }
+  
+  
+  /** Compute the probability that a point query does not return the exact value
+   * 
+   *  @param  width   Width of the count-min sketch
+   *  @param  depth   Depth of the count-min sketch
+   *  @param  nb      Number of elements inserted
+   * 
+   *  @return   expected percentage of collisions in a row
+   */
+  private double notExactPointQueryProba(int width, int depth, int nb) {
+    if (nb == 0) { return 0.0; }
+    double w = (double) width;
+    double d = (double) depth;
+    double n = (double) nb;
+    return Math.pow(1 - Math.pow(1 - 1 / w, nb - 1), d);
+  }
+  
+  
+  /** Get the depth to ensure a given error bound is met for a given user
+   * 
+   *  @param    n   Maximum number of keys to insert in a sketch
+   * 
+   *  @return   Minimum depth to ensure the error condition for point query is met
+   *            or null if not possible
+   * 
+   *  @throws TasteException    If not possible to meet the condition
+   */
+  private Integer getDepthForPointError(int width, int n) throws TasteException {
+    
+    double currentError;
+    int currentDepth;
+    int da = 1, db = MAX_DEPTH;
+    
+    /* Check if max depth is big enough to find a solution, not possible otherwise */
+    currentError = notExactPointQueryProba(width, db, n);
+    if (currentError > betaP) {
+      return null;
+    }
+    
+    /* Start binary search */
+    while (da < (db - 1)) {
+      log.debug("For point error, search between {} and {}", da, db);
+      currentDepth = (da + db) / 2;
+      currentError = notExactPointQueryProba(width, currentDepth, n);
+      if (currentError > betaP) {
+        da = currentDepth;
+      } else {
+        db = currentDepth;
+      }
+    }
+    log.debug("For point error={}, width selected to meet condition is {}", betaP, db);
+    return new Integer(db);
   }
   
   

@@ -23,13 +23,14 @@ public class DoubleCountMinSketch extends AbstractCountMinSketch {
   /** Setup a new count-min sketch with parameters w and d
    * The parameters w and d control the accuracy of the estimates of the sketch
    * 
-   * @param w   Width
-   * @param d   Depth
+   * @param w           Width
+   * @param d           Depth
+   * @param hfBuilder   Hash functions builder
    * 
    * @throws  CountMinSketch.CMException  If delta or epsilon are not in the unit interval
    */
-  public DoubleCountMinSketch(int width, int depth) throws CMException {
-    super(width, depth);
+  public DoubleCountMinSketch(int width, int depth, HashFunctionBuilder hfBuilder) throws CMException {
+    super(width, depth, hfBuilder);
     count = new TDoubleArrayList(w * d);
     for (int i = 0; i < w * d; i++) { count.insert(i, 0); }
   }
@@ -37,13 +38,14 @@ public class DoubleCountMinSketch extends AbstractCountMinSketch {
   /** Setup a new count-min sketch with parameters delta, epsilon, and k
    * The parameters delta,epsilon and k control the accuracy of the estimates of the sketch
    * 
-   * @param delta     A value in the unit interval that sets the precision of the sketch
-   * @param epsilon   A value in the unit interval that sets the precision of the sketch
+   * @param delta       A value in the unit interval that sets the precision of the sketch
+   * @param epsilon     A value in the unit interval that sets the precision of the sketch
+   * @param hfBuilder   Hash functions builder
    * 
    * @throws  CountMinSketch.CMException  If delta or epsilon are not in the unit interval
    */
-  public DoubleCountMinSketch(double delta, double epsilon) throws CMException {
-    super(delta, epsilon);
+  public DoubleCountMinSketch(double delta, double epsilon, HashFunctionBuilder hfBuilder) throws CMException {
+    super(delta, epsilon, hfBuilder);
     count = new TDoubleArrayList(w * d);
     for (int i = 0; i < w * d; i++) { count.insert(i, 0); }
   }

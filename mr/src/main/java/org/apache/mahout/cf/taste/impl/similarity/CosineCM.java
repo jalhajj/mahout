@@ -6,6 +6,7 @@ import org.apache.mahout.cf.taste.model.DataModel;
 import org.apache.mahout.cf.taste.model.PreferenceArray;
 import org.apache.mahout.cf.taste.impl.common.AbstractCountMinSketch;
 import org.apache.mahout.cf.taste.impl.common.DoubleCountMinSketch;
+import org.apache.mahout.cf.taste.impl.common.HashFunctionBuilder;
 
 import com.google.common.base.Preconditions;
 
@@ -17,21 +18,23 @@ public final class CosineCM extends AbstractSimilarity {
   private final double epsilon;
   private final double delta;
   private final HashMap<Long, DoubleCountMinSketch> sketches;
+  private final HashFunctionBuilder hfBuilder;
 
   /**
    * @throws IllegalArgumentException if {@link DataModel} does not have preference values
    */
-  public CosineCM(DataModel dataModel, double eps, double del) throws TasteException {
-    this(dataModel, Weighting.UNWEIGHTED, eps, del);
+  public CosineCM(DataModel dataModel, double eps, double del, HashFunctionBuilder hfBuilder_) throws TasteException {
+    this(dataModel, Weighting.UNWEIGHTED, eps, del, hfBuilder_);
   }
 
   /**
    * @throws IllegalArgumentException if {@link DataModel} does not have preference values
    */
-  public CosineCM(DataModel dataModel, Weighting weighting, double eps, double del) throws TasteException {
+  public CosineCM(DataModel dataModel, Weighting weighting, double eps, double del, HashFunctionBuilder hfBuilder_) throws TasteException {
     super(dataModel, weighting, false);
     epsilon = eps;
     delta = del;
+    hfBuilder = hfBuilder_;
     sketches = new HashMap<Long, DoubleCountMinSketch>(dataModel.getNumUsers());
     Preconditions.checkArgument(dataModel.hasPreferenceValues(), "DataModel doesn't have preference values");
   }
@@ -43,7 +46,7 @@ public final class CosineCM extends AbstractSimilarity {
     if (cm == null) {
       
       try{
-        cm = new DoubleCountMinSketch(delta, epsilon);
+        cm = new DoubleCountMinSketch(delta, epsilon, hfBuilder);
       } catch(AbstractCountMinSketch.CMException ex) {
         throw new TasteException("CountMinSketch error:" + ex.getMessage());
       }
@@ -111,8 +114,8 @@ public final class CosineCM extends AbstractSimilarity {
     
     try{
       
-      cm1 = new DoubleCountMinSketch(delta, epsilon);
-      cm2 = new DoubleCountMinSketch(delta, epsilon);
+      cm1 = new DoubleCountMinSketch(delta, epsilon, hfBuilder);
+      cm2 = new DoubleCountMinSketch(delta, epsilon, hfBuilder);
       
     } catch(AbstractCountMinSketch.CMException ex) {
       throw new TasteException("CountMinSketch error:" + ex.getMessage());
