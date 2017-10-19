@@ -33,8 +33,6 @@ public abstract class AbstractCountMinSketch {
   private void init(int width, int depth) throws CMException {
     w = width;
     d = depth;
-
-    if (d > 21) { throw new CMException("d > 21 is not supported"); } // Not enough random parameters for hash functions
     
     log.debug("Creating count-min sketch with width {} and depth {}", w, d);
     

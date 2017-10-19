@@ -118,8 +118,6 @@ public final class CosineCM extends AbstractSimilarity {
       throw new TasteException("CountMinSketch error:" + ex.getMessage());
     }
     
-    // Export whole profiles for now
-    // TODO: export only part of profiles, but which part?
     for (int i = 0; i < xLength || i < yLength; i++) {
       if (i < xLength) {
         xIndex = xPrefs.getUserID(i);
