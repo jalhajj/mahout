@@ -153,7 +153,7 @@ public class GenericUserBasedRecommender extends AbstractRecommender implements 
         if (sim == null) {
           pref = dataModel.getPreferenceValue(userID, itemID);
         } else { // Use point query result
-          DoubleCountMinSketch cm = sim.exportCMProfile(userID);
+          DoubleCountMinSketch cm = sim.getExportedCMProfile(userID);
           pref = (float) cm.get(itemID);
           if (pref == 0.0) { pref = null; }
         }

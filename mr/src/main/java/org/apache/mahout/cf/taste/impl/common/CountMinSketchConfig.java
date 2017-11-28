@@ -16,6 +16,8 @@ import org.apache.mahout.cf.taste.impl.common.LongPrimitiveIterator;
 import org.apache.mahout.cf.taste.model.DataModel;
 import org.apache.mahout.cf.taste.model.PreferenceArray;
 
+import gnu.trove.map.hash.TLongDoubleHashMap;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,20 +35,24 @@ public class CountMinSketchConfig implements Serializable {
   /** Class to serialize the result of the computation */
   class EDResult implements Serializable {
 
-    private final double delta;
-    private final double epsilon;
+    private final TLongDoubleHashMap delta;
+    private final TLongDoubleHashMap epsilon;
     
-    EDResult(double d, double e) {
-      delta = d;
-      epsilon = e;
+    EDResult(int size) {
+      delta = new TLongDoubleHashMap(size);
+      epsilon = new TLongDoubleHashMap(size);
     }
+    
+    void set(long userID, double d, double e) {
+			delta.put(userID, d);
+			epsilon.put(userID, e);
+		}
     
   }
   
   
   /**
-   *  @param    g   gamma-deniability condition value
-   *  @param    e   Error bound value
+   *  @param    q_		accuracy/privacy trade-off wished
    */
   public CountMinSketchConfig(double q_) {
     q = q_;
@@ -54,11 +60,12 @@ public class CountMinSketchConfig implements Serializable {
   }
   
   
-  /** Configure the count-min sketch delta and epsilon parameters
+  /** Configure the count-min sketch delta and epsilon parameters for
+   *  all users
    * 
    *  Must be called before getDelta() and getEpsilon()
    * 
-   *  @param  dataModel     Dataset
+   *  
    *  @param  datasetName   Name of the dataset file, used as dataset
    *                        identifier for serialization
    * 
@@ -73,8 +80,7 @@ public class CountMinSketchConfig implements Serializable {
       FileInputStream fileIn = new FileInputStream(path);
       ObjectInputStream in = new ObjectInputStream(fileIn);
       result = (EDResult) in.readObject(); // If found, retrieve the result
-      log.info("Found file, already computed, retrieved results delta={} and epsilon={}",
-                getDelta(), getEpsilon());
+      log.info("Found file, already computed");
       in.close();
       fileIn.close();
     } catch(IOException ex) {
@@ -114,45 +120,41 @@ public class CountMinSketchConfig implements Serializable {
   private void computeConfig(DataModel dataModel) throws TasteException {
     
     LongPrimitiveIterator it = dataModel.getUserIDs();
-    int n = 0;
     int u = dataModel.getNumItems();
+    result = new EDResult(dataModel.getNumUsers());
     
-    /* NOTE: For now, consider all users, but in the future, we may want to not
-     * bother about those with huge profiles. For instance, the width chosen
-     * could double because of ONE user..
-     */
-    /* Find the maximum number of items in a user profile */
     while (it.hasNext()) {
+			
       long userID = it.next();
-      int profileSize = dataModel.getPreferencesFromUser(userID).length();
-      n = Math.max(n, profileSize);
-    }
-    
-    int bestWidth = 0;
-    int bestDepth = 0;
-    double bestMax = 0;
-    for (int d = MIN_DEPTH; d < MAX_DEPTH; d++) {
-			for (int w = d; w <= n; w++) {
-				double x = Fmeasure(w, d, n, u, q);
-				if (x >= bestMax) {
-					bestWidth = w;
-					bestDepth = d;
-					bestMax = x;
+      int n = dataModel.getPreferencesFromUser(userID).length();
+			int bestWidth = 0;
+			int bestDepth = 0;
+			double bestMax = 0;
+			
+			for (int d = MIN_DEPTH; d < MAX_DEPTH; d++) {
+				for (int w = d; w <= n; w++) {
+					double x = Fmeasure(w, d, n, u, q);
+					if (x >= bestMax) {
+						bestWidth = w;
+						bestDepth = d;
+						bestMax = x;
+					}
 				}
 			}
-		}
-    
-    /* Check if a solution was found */
-    if (bestWidth == 0 && bestDepth == 0) {
-      throw new TasteException("No solution found (this should not happen)");
+			
+			/* Check if a solution was found */
+			if (bestWidth == 0 && bestDepth == 0) {
+				throw new TasteException("No solution found (this should not happen) (w=0 and d=0");
+			}
+			
+			double epsilon = Math.exp(1) / (double) bestWidth;
+			double delta = Math.exp(- (double) bestDepth);
+			result.set(userID, delta, epsilon);
+			log.info("Parameters chosen for user {}: width={} (epsilon={}), depth={} (delta={})",
+              userID, bestWidth, epsilon, bestDepth, delta);
+			
     }
-    
-    /* Compute the chosen parameters */
-    double epsilon = Math.exp(1) / (double) bestWidth;
-    double delta = Math.exp(- (double) bestDepth);
-    result = new EDResult(delta, epsilon);
-    log.info("Parameters chosen: width={} (epsilon={}), depth={} (delta={})",
-              bestWidth, epsilon, bestDepth, delta);
+
   }
   
   
@@ -219,29 +221,33 @@ public class CountMinSketchConfig implements Serializable {
   
   /** Return delta parameter
    * 
-   * @return  delta parameter
+   * @param		userID		user identifier
+   * 
+   * @return  delta parameter for userID
    * 
    * @throws  TasteException    If configure method was not called first
    */
-  public double getDelta() throws TasteException {
+  public double getDelta(long userID) throws TasteException {
     if (result == null) {
       throw new TasteException("delta is null, call configure method first");
     } else
-    return result.delta;
+    return result.delta.get(userID);
   }
   
   
   /** Return epsilon parameter
    * 
-   * @return  epsilon parameter
+   * @param		userID		user identifier
+   * 
+   * @return  epsilon parameter for userID
    * 
    * @throws  TasteException    If configure method was not called first
    */
-  public double getEpsilon() throws TasteException {
+  public double getEpsilon(long userID) throws TasteException {
     if (result == null) {
       throw new TasteException("epsilon is null, call configure method first");
     } else
-    return result.epsilon;
+    return result.epsilon.get(userID);
   }
   
   

@@ -7,6 +7,7 @@ import org.apache.mahout.cf.taste.model.PreferenceArray;
 import org.apache.mahout.cf.taste.impl.common.AbstractCountMinSketch;
 import org.apache.mahout.cf.taste.impl.common.DoubleCountMinSketch;
 import org.apache.mahout.cf.taste.impl.common.HashFunctionBuilder;
+import org.apache.mahout.cf.taste.impl.common.CountMinSketchConfig;
 
 import com.google.common.base.Preconditions;
 
@@ -15,53 +16,53 @@ import java.util.HashMap;
 
 public final class CosineCM extends AbstractSimilarity {
   
-  private final double epsilon;
-  private final double delta;
   private final HashMap<Long, DoubleCountMinSketch> sketches;
   private final HashFunctionBuilder hfBuilder;
+  private final CountMinSketchConfig config;
 
   /**
    * @throws IllegalArgumentException if {@link DataModel} does not have preference values
    */
-  public CosineCM(DataModel dataModel, double eps, double del, HashFunctionBuilder hfBuilder_) throws TasteException {
-    this(dataModel, Weighting.UNWEIGHTED, eps, del, hfBuilder_);
+  public CosineCM(DataModel dataModel, CountMinSketchConfig conf, HashFunctionBuilder hfBuilder_) throws TasteException {
+    this(dataModel, Weighting.UNWEIGHTED, conf, hfBuilder_);
   }
 
   /**
    * @throws IllegalArgumentException if {@link DataModel} does not have preference values
    */
-  public CosineCM(DataModel dataModel, Weighting weighting, double eps, double del, HashFunctionBuilder hfBuilder_) throws TasteException {
+  public CosineCM(DataModel dataModel, Weighting weighting, CountMinSketchConfig conf, HashFunctionBuilder hfBuilder_) throws TasteException {
     super(dataModel, weighting, false);
-    epsilon = eps;
-    delta = del;
+    config = conf;
     hfBuilder = hfBuilder_;
     sketches = new HashMap<Long, DoubleCountMinSketch>(dataModel.getNumUsers());
     Preconditions.checkArgument(dataModel.hasPreferenceValues(), "DataModel doesn't have preference values");
   }
   
-  public DoubleCountMinSketch exportCMProfile(long userID) throws TasteException {
-    
+  private DoubleCountMinSketch exportProfile(long userID, double delta, double epsilon) throws TasteException {
+		DoubleCountMinSketch cm = null;
+		try{
+			cm = new DoubleCountMinSketch(delta, epsilon, hfBuilder);
+		} catch(AbstractCountMinSketch.CMException ex) {
+			throw new TasteException("CountMinSketch error:" + ex.getMessage());
+		}
+      
+		DataModel dataModel = getDataModel();
+		PreferenceArray prefs = dataModel.getPreferencesFromUser(userID);
+		int length = prefs.length();
+		for (int i = 0; i < length; i++) {
+			long index = prefs.getItemID(i);
+			double x = prefs.getValue(i);
+			cm.update(index, x);
+		}
+		return cm;
+	}
+  
+  public DoubleCountMinSketch getExportedCMProfile(long userID) throws TasteException {
     DoubleCountMinSketch cm = sketches.get(userID);
-    
     if (cm == null) {
-      
-      try{
-        cm = new DoubleCountMinSketch(delta, epsilon, hfBuilder);
-      } catch(AbstractCountMinSketch.CMException ex) {
-        throw new TasteException("CountMinSketch error:" + ex.getMessage());
-      }
-      
-      DataModel dataModel = getDataModel();
-      PreferenceArray prefs = dataModel.getPreferencesFromUser(userID);
-      int length = prefs.length();
-      for (int i = 0; i < length; i++) {
-        long index = prefs.getItemID(i);
-        double x = prefs.getValue(i);
-        cm.update(index, x);
-      }
+      cm = exportProfile(userID, config.getDelta(userID), config.getEpsilon(userID));
       sketches.put(userID, cm);
     }
-    
     return cm;
   }
 
@@ -82,8 +83,8 @@ public final class CosineCM extends AbstractSimilarity {
   @Override
   public double userSimilarity(long userID1, long userID2) throws TasteException {
     
-    DoubleCountMinSketch cm1 = exportCMProfile(userID1);
-    DoubleCountMinSketch cm2 = exportCMProfile(userID2);
+    DoubleCountMinSketch cm1 = exportProfile(userID1, config.getDelta(userID2), config.getEpsilon(userID2));
+    DoubleCountMinSketch cm2 = getExportedCMProfile(userID2);
     
     double result = DoubleCountMinSketch.cosine(cm1, cm2);
     
@@ -92,56 +93,6 @@ public final class CosineCM extends AbstractSimilarity {
     }
     return result;
     
-  }
-  
-  @Override
-  public final double itemSimilarity(long itemID1, long itemID2) throws TasteException {
-    
-    DataModel dataModel = getDataModel();
-    PreferenceArray xPrefs = dataModel.getPreferencesForItem(itemID1);
-    PreferenceArray yPrefs = dataModel.getPreferencesForItem(itemID2);
-    int xLength = xPrefs.length();
-    int yLength = yPrefs.length();
-    
-    if (xLength == 0 || yLength == 0) {
-      return Double.NaN;
-    }
-    
-    long xIndex, yIndex;
-    double x, y;
-    
-    DoubleCountMinSketch cm1, cm2;
-    
-    try{
-      
-      cm1 = new DoubleCountMinSketch(delta, epsilon, hfBuilder);
-      cm2 = new DoubleCountMinSketch(delta, epsilon, hfBuilder);
-      
-    } catch(AbstractCountMinSketch.CMException ex) {
-      throw new TasteException("CountMinSketch error:" + ex.getMessage());
-    }
-    
-    for (int i = 0; i < xLength || i < yLength; i++) {
-      if (i < xLength) {
-        xIndex = xPrefs.getUserID(i);
-        x = xPrefs.getValue(i);
-        cm1.update(xIndex, x);
-      }
-      if (i < yLength) {
-        yIndex = yPrefs.getUserID(i);
-        y = yPrefs.getValue(i);
-        cm2.update(yIndex, y);
-      }
-    }
-    
-    double result = DoubleCountMinSketch.cosine(cm1, cm2);
-    int count = xLength > yLength ? yLength : xLength; // Set minimum, but not important I think
-    
-    if (!Double.isNaN(result)) {
-      result = normalizeWeightResult(result, count, 0);
-    }
-    return result;
-  
   }
 
 }
