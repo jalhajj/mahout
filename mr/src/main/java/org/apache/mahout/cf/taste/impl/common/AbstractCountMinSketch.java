@@ -68,10 +68,10 @@ public abstract class AbstractCountMinSketch {
    */
   public AbstractCountMinSketch(double delta, double epsilon, HashFunctionBuilder hfBuilder) throws CMException {
     
-    if (delta <= 0 || delta >= 1) {
+    if (delta <= 0 || delta > Math.exp(-1)) {
       throw new CMException("delta must be between 0 and 1, exclusive");
     }
-    if (epsilon <= 0 || epsilon >= 1) {
+    if (epsilon <= 0 || epsilon > Math.exp(1)) {
       throw new CMException("epsilon must be between 0 and 1, exclusive");
     }
     
