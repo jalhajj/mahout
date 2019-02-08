@@ -2,7 +2,6 @@ package org.apache.mahout.cf.taste.impl.recommender;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.Callable;
@@ -64,11 +63,20 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 		int m = dataModel.getNumItems();
 
 		this.ACOC = new ArrayList<ArrayList<Average>>(this.k);
+		this.ARC = new ArrayList<Average>(this.k);
+		this.ACC = new ArrayList<Average>(this.l);
 		for (int g = 0; g < this.k; g++) {
-			this.ACOC.add(new ArrayList<Average>(Collections.nCopies(this.l, null)));
+			this.ARC.add(new Average());
+			ArrayList<Average> list =new ArrayList<Average>(this.l);
+			for (int h = 0; h < this.l; h++) {
+				list.add(new Average());
+				if (g == 0) {
+					this.ACC.add(new Average());
+				}
+			}
+			this.ACOC.add(list);
 		}
-		this.ARC = new ArrayList<Average>(Collections.nCopies(this.k, null));
-		this.ACC = new ArrayList<Average>(Collections.nCopies(this.l, null));
+		
 		this.AR = new FastByIDMap<Average>(n);
 		this.AC = new FastByIDMap<Average>(m);
 		this.Rho = new FastByIDMap<Index>(n);
