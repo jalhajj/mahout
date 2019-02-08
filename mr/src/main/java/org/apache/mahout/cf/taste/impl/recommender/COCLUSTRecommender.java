@@ -29,6 +29,7 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 	private final Random random;
 	private final int k;
 	private final int l;
+	private final int nbMaxIterations;
 	private ArrayList<ArrayList<Average>> ACOC;
 	private ArrayList<Average> ARC;
 	private ArrayList<Average> ACC;
@@ -46,16 +47,18 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 	 * @param dataModel
 	 * @param k         number of row clusters
 	 * @param l         number of column clusters
+	 * @param maxIter   maximum number of iterations to train
 	 *
 	 * @throws TasteException
 	 */
-	public COCLUSTRecommender(DataModel dataModel, int nbUserClusters, int nbItemClusters) throws TasteException {
+	public COCLUSTRecommender(DataModel dataModel, int nbUserClusters, int nbItemClusters, int maxIter) throws TasteException {
 
 		super(dataModel);
 
 		this.random = RandomUtils.getRandom();
 		this.k = nbUserClusters;
 		this.l = nbItemClusters;
+		this.nbMaxIterations = maxIter;
 		
 		log.info("COCLUST Recommender with k={} and l={}", this.k, this.l);
 
@@ -185,7 +188,6 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 			while(itU.hasNext()) {
 				long userID = itU.nextLong();
 				int curIdx = this.Rho.get(userID).get();
-				float curMin = 0;
 				int minIdx = curIdx;
 				float min = Float.MAX_VALUE;
 				for (int g = 0; g < this.k; g++) {
@@ -199,9 +201,6 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 								+ this.ARC.get(g).compute() - this.AC.get(itemID).compute()
 								+ this.ACC.get(h).compute();
 						candidate += x * x;
-					}
-					if (g == curIdx) {
-						curMin = candidate;
 					}
 					if (prefs.length() != 0 && candidate <= min) {
 						min = candidate;
@@ -246,7 +245,7 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 			}
 			
 			iterNb++;
-		} while (nbChanged > 0);
+		} while (iterNb < this.nbMaxIterations && nbChanged > 0);
 	}
 
 	@Override
