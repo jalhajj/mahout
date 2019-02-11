@@ -35,23 +35,27 @@ public class Bicluster<E> {
 		this.items.remove(item);
 	}
 	
-	int getNbUsers() {
+	public int getNbUsers() {
 		return this.users.size();
 	}
 	
-	int getNbItems() {
+	public int getNbItems() {
 		return this.items.size();
 	}
 	
-	Iterator<E> getUsers() {
+	public boolean containsItem(long item) {
+		return this.items.contains(item);
+	}
+	
+	public Iterator<E> getUsers() {
 		return this.users.iterator();
 	}
 	
-	Iterator<E> getItems() {
+	public Iterator<E> getItems() {
 		return this.items.iterator();
 	}
 	
-	boolean isEmpty() {
+	public boolean isEmpty() {
 		return this.users.isEmpty()  || this.items.isEmpty();
 	}
 	

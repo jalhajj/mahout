@@ -28,6 +28,7 @@ import com.google.common.base.Preconditions;
 import org.apache.mahout.cf.taste.common.NoSuchItemException;
 import org.apache.mahout.cf.taste.common.NoSuchUserException;
 import org.apache.mahout.cf.taste.common.TasteException;
+import org.apache.mahout.cf.taste.impl.common.Bicluster;
 import org.apache.mahout.cf.taste.impl.common.LongPrimitiveIterator;
 import org.apache.mahout.cf.taste.impl.similarity.GenericItemSimilarity;
 import org.apache.mahout.cf.taste.impl.similarity.GenericUserSimilarity;
@@ -42,6 +43,7 @@ import org.apache.mahout.cf.taste.recommender.RecommendedItem;
 public final class TopItems {
   
   private static final long[] NO_IDS = new long[0];
+  private static final List<Bicluster<Long>> NO_BIDS = new ArrayList<Bicluster<Long>>();
   
   private TopItems() { }
   
@@ -129,6 +131,46 @@ public final class TopItems {
     int i = 0;
     for (SimilarUser similarUser : sorted) {
       result[i++] = similarUser.getUserID();
+    }
+    return result;
+  }
+  
+  public static List<Bicluster<Long>> getTopBiclusters(int howMany, Iterator<Bicluster<Long>> biclusters, Estimator<Bicluster<Long>> estimator) throws TasteException {
+	int biclusterID = 0;
+    Queue<SimilarBicluster> topBiclusters = new PriorityQueue<>(howMany + 1, Collections.reverseOrder());
+    boolean full = false;
+    double lowestTopValue = Double.NEGATIVE_INFINITY;
+    while (biclusters.hasNext()) {
+      Bicluster<Long> bicluster = biclusters.next();
+      double similarity;
+      try {
+        similarity = estimator.estimate(bicluster);
+      } catch (NoSuchUserException nsue) {
+        continue;
+      }
+      double rescoredSimilarity = similarity;
+      if (!Double.isNaN(rescoredSimilarity) && (!full || rescoredSimilarity > lowestTopValue)) {
+    	  topBiclusters.add(new SimilarBicluster(biclusterID, bicluster, rescoredSimilarity));
+        if (full) {
+        	topBiclusters.poll();
+        } else if (topBiclusters.size() > howMany) {
+          full = true;
+          topBiclusters.poll();
+        }
+        lowestTopValue = topBiclusters.peek().getSimilarity();
+      }
+      biclusterID++;
+    }
+    int size = topBiclusters.size();
+    if (size == 0) {
+      return NO_BIDS;
+    }
+    List<SimilarBicluster> sorted = new ArrayList<>(size);
+    sorted.addAll(topBiclusters);
+    Collections.sort(sorted);
+    List<Bicluster<Long>> result = new ArrayList<Bicluster<Long>>(howMany);
+    for (SimilarBicluster similarBicluster : sorted) {
+      result.add(similarBicluster.getBicluster());
     }
     return result;
   }

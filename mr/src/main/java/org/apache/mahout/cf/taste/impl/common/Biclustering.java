@@ -1,6 +1,7 @@
 package org.apache.mahout.cf.taste.impl.common;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 
 public class Biclustering<E> {
 	
@@ -18,8 +19,12 @@ public class Biclustering<E> {
 		return this.biclusters.get(i);
 	}
 	
-	int size() {
+	public int size() {
 		return this.biclusters.size();
+	}
+	
+	public Iterator<Bicluster<E>> iterator() {
+		return this.biclusters.iterator();
 	}
 	
 	public String toString() {
