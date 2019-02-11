@@ -1,30 +1,37 @@
 package org.apache.mahout.cf.taste.impl.common;
 
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
-public class Bicluster {
+public class Bicluster<E> {
 	
-	private List<Long> users;
-	private List<Long> items;
+	private List<E> users;
+	private List<E> items;
 	
-	Bicluster(List<Long> u, List<Long> j) {
+	Bicluster(List<E> u, List<E> j) {
 		this.users = u;
 		this.items = j;
 	}
 	
-	void addUser(long user) {
+	Bicluster() {
+		this.users = new ArrayList<E>();
+		this.items = new ArrayList<E>();
+	}
+	
+	void addUser(E user) {
 		this.users.add(user);
 	}
 	
-	void removeUser(long user) {
+	void removeUser(E user) {
 		this.users.remove(user);
 	}
 	
-	void addItem(long item) {
+	void addItem(E item) {
 		this.items.add(item);
 	}
 	
-	void removeItem(long item) {
+	void removeItem(E item) {
 		this.items.remove(item);
 	}
 	
@@ -34,6 +41,22 @@ public class Bicluster {
 	
 	int getNbItems() {
 		return this.items.size();
+	}
+	
+	Iterator<E> getUsers() {
+		return this.users.iterator();
+	}
+	
+	Iterator<E> getItems() {
+		return this.items.iterator();
+	}
+	
+	boolean isEmpty() {
+		return this.users.isEmpty()  || this.items.isEmpty();
+	}
+	
+	public String toString() {
+		return this.users.toString() + "x" + this.items.toString();
 	}
 
 }
