@@ -7,12 +7,7 @@ import java.util.List;
 import org.apache.mahout.cf.taste.common.TasteException;
 import org.apache.mahout.cf.taste.model.DataModel;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 public class Bimax {
-	
-	private static final Logger log = LoggerFactory.getLogger(Bimax.class);
 	
 	private DataModel dataModel;
 	private Biclustering<Long> bicl;
@@ -20,15 +15,23 @@ public class Bimax {
 	private ArrayList<Long> itemMap;
 	private int n;
 	private int m;
+	private int minN;
+	private int minM;
 	private float threshold;
+	
+	public Bimax(DataModel data, float thres) throws TasteException {
+		this(data, thres, 1, 1);
+	}
 	
 	/** Performs a biclustering based on Bimax exhaustive divide and conquer search
 	 * 
 	 * @param data User item matrix
 	 * @param thres Threshold to obtain binary ratings
+	 * @param minUserSize minimum number of users in a bicluster
+	 * @param minItemSize minimum number of items in a bicluster
 	 * @throws TasteException
 	 */
-	public Bimax(DataModel data, float thres) throws TasteException {
+	public Bimax(DataModel data, float thres, int minUserSize, int minItemSize) throws TasteException {
 		LongPrimitiveIterator it;
 		int i;
 		this.dataModel = data;
@@ -36,6 +39,8 @@ public class Bimax {
 		this.threshold = thres;
 		this.n = data.getNumUsers();
 		this.m = data.getNumItems();
+		this.minN = minUserSize;
+		this.minM = minItemSize;
 		this.userMap = new ArrayList<Long>(this.n);
 		this.itemMap = new ArrayList<Long>(this.m);
 		
@@ -93,7 +98,7 @@ public class Bimax {
 		
 		if (onlyOnes) {
 			
-			if (hasManda) {
+			if (hasManda && bicluster.getNbUsers() >= this.minN && bicluster.getNbItems() >= this.minM) {
 				/* Add bicluster */
 				Bicluster<Long> bc = new Bicluster<Long>();
 				itU = bicluster.getUsers();
