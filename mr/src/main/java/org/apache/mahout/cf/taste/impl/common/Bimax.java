@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-import org.apache.commons.collections.CollectionUtils;
 import org.apache.mahout.cf.taste.common.TasteException;
 import org.apache.mahout.cf.taste.model.DataModel;
 
@@ -66,8 +65,6 @@ public class Bimax {
 	
 	private void conquer(Bicluster<Integer> bicluster, List<Integer> mandatory) throws TasteException {
 		
-		log.info("Current bicluster is {}, mandatory columns were {}", bicluster.toString(), mandatory == null ? "none" : mandatory.toString());
-		
 		/* Check if empty */
 		if (bicluster.isEmpty()) {
 			return;
@@ -110,7 +107,6 @@ public class Bimax {
 					bc.addItem(this.itemMap.get(j));
 				}
 				this.bicl.add(bc);
-				log.info("Added bicluster {}, mandatory columns were {}", bc.toString(), mandatory == null ? "none" : mandatory.toString());
 			}
 			
 		} else {

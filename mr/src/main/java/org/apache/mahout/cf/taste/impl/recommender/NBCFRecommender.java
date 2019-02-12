@@ -158,7 +158,10 @@ public class NBCFRecommender extends AbstractRecommender {
 				}
 			}
 		}
-		float estimate = (float) (meanRating + (preference / totalSimilarity));
+		float estimate = (float) meanRating;
+		if (totalSimilarity > 0) {
+			estimate += (float) preference / totalSimilarity;
+		}
 		if (capper != null) {
 			estimate = capper.capEstimate(estimate);
 		}
