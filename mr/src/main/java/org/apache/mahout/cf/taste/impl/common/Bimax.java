@@ -75,6 +75,11 @@ public class Bimax {
 			return;
 		}
 		
+		/* Check size */
+		if (bicluster.getNbUsers() < this.minN || bicluster.getNbItems() < this.minM) {
+			return;
+		}
+		
 		/* Check if end of recursion (full of ones and has at least one of mandatory columns) */
 		boolean onlyOnes = true;
 		boolean hasManda = mandatory == null ? true : false;
@@ -98,7 +103,7 @@ public class Bimax {
 		
 		if (onlyOnes) {
 			
-			if (hasManda && bicluster.getNbUsers() >= this.minN && bicluster.getNbItems() >= this.minM) {
+			if (hasManda) {
 				/* Add bicluster */
 				Bicluster<Long> bc = new Bicluster<Long>();
 				itU = bicluster.getUsers();
