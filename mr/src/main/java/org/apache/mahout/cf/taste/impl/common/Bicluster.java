@@ -43,7 +43,7 @@ public class Bicluster<E> {
 		return this.items.size();
 	}
 	
-	public boolean containsItem(long item) {
+	public boolean containsItem(E item) {
 		return this.items.contains(item);
 	}
 	
