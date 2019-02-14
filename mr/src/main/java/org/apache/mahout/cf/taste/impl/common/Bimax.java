@@ -10,12 +10,12 @@ import org.apache.mahout.cf.taste.model.Preference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class Bimax {
+import com.google.common.base.Preconditions;
+
+public class Bimax extends AbstractBiclusteringAlgorithm {
 
 	private static Logger log = LoggerFactory.getLogger(Bimax.class);
 
-	private DataModel dataModel;
-	private Biclustering<Long> bicl;
 	private ArrayList<Long> userMap;
 	private ArrayList<Long> itemMap;
 	private FastByIDMap<Integer> invUserMap;
@@ -40,10 +40,11 @@ public class Bimax {
 	 * @throws TasteException
 	 */
 	public Bimax(DataModel data, float thres, int minUserSize, int minItemSize) throws TasteException {
-		LongPrimitiveIterator it;
-		int i;
-		this.dataModel = data;
-		this.bicl = new Biclustering<Long>();
+		super(data);
+		Preconditions.checkArgument(minUserSize > 0,
+				"Minimum number of users in a bicluster must be greater than 1: " + minUserSize);
+		Preconditions.checkArgument(minItemSize > 0,
+				"Minimum number of items in a bicluster must be greater than 1: " + minItemSize);
 		this.threshold = thres;
 		this.n = data.getNumUsers();
 		this.m = data.getNumItems();
@@ -53,33 +54,6 @@ public class Bimax {
 		this.itemMap = new ArrayList<Long>(this.m);
 		this.invUserMap = new FastByIDMap<Integer>(this.n);
 		this.invItemMap = new FastByIDMap<Integer>(this.m);
-
-		IntBicluster bicluster = new IntBicluster(this.m);
-
-		it = data.getUserIDs();
-		i = 0;
-		while (it.hasNext()) {
-			long userID = it.nextLong();
-			this.userMap.add(userID);
-			this.invUserMap.put(userID, i);
-			bicluster.addUser(i);
-			i++;
-		}
-
-		it = data.getItemIDs();
-		i = 0;
-		while (it.hasNext()) {
-			long itemID = it.nextLong();
-			this.itemMap.add(itemID);
-			this.invItemMap.put(itemID, i);
-			bicluster.addItem(i);
-			i++;
-		}
-
-		log.info("Starting divide-and-conquer search");
-		conquer(bicluster, null);
-		log.info("Done with the search, found {} biclusters", this.bicl.size());
-
 	}
 
 	private void conquer(Bicluster<Integer> bicluster, List<Integer> mandatory) throws TasteException {
@@ -125,6 +99,10 @@ public class Bimax {
 			}
 		}
 
+		/*
+		 * If only ones and mandatory columns are there, we have a bicluster, let us
+		 * register it
+		 */
 		if (onlyOnes) {
 
 			if (hasManda) {
@@ -150,8 +128,8 @@ public class Bimax {
 			IntBicluster bcV = new IntBicluster(this.m);
 			ArrayList<Integer> CV = new ArrayList<Integer>();
 
+			/* Split items for sub-matrices */
 			long curUserID = this.userMap.get(curRow);
-
 			Iterator<Integer> itI = bicluster.getItems();
 			while (itI.hasNext()) {
 				int j = itI.next();
@@ -164,6 +142,7 @@ public class Bimax {
 				bcV.addItem(j);
 			}
 
+			/* Split users for sub-matrices */
 			itU = bicluster.getUsers();
 			while (itU.hasNext()) {
 				int i = itU.next();
@@ -195,14 +174,41 @@ public class Bimax {
 				}
 			}
 
+			/* Execute on sub-matrices */
 			conquer(bcU, mandatory);
 			conquer(bcV, CV);
 
 		}
 	}
 
-	public Biclustering<Long> get() {
-		return this.bicl;
+	@Override
+	void run() throws TasteException {
+		/* Create initial bicluster which is the whole matrix */
+		IntBicluster bicluster = new IntBicluster(this.m);
+		LongPrimitiveIterator it;
+		int i;
+		it = this.dataModel.getUserIDs();
+		i = 0;
+		while (it.hasNext()) {
+			long userID = it.nextLong();
+			this.userMap.add(userID);
+			this.invUserMap.put(userID, i);
+			bicluster.addUser(i);
+			i++;
+		}
+		it = this.dataModel.getItemIDs();
+		i = 0;
+		while (it.hasNext()) {
+			long itemID = it.nextLong();
+			this.itemMap.add(itemID);
+			this.invItemMap.put(itemID, i);
+			bicluster.addItem(i);
+			i++;
+		}
+		/* Run the conquer search */
+		log.info("Starting divide-and-conquer search");
+		conquer(bicluster, null);
+		log.info("Done with the search, found {} biclusters", this.bicl.size());
 	}
 
 }
