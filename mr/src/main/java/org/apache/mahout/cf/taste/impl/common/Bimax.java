@@ -44,7 +44,7 @@ public class Bimax extends AbstractBiclusteringAlgorithm {
 				"Minimum number of users in a bicluster must be greater than 1: " + minUserSize);
 		Preconditions.checkArgument(minItemSize > 0,
 				"Minimum number of items in a bicluster must be greater than 1: " + minItemSize);
-		this.threshold = 1;
+		this.threshold = 0;
 		this.n = data.getNumUsers();
 		this.m = data.getNumItems();
 		this.minN = minUserSize;
@@ -88,7 +88,7 @@ public class Bimax extends AbstractBiclusteringAlgorithm {
 			while (onlyOnes && itI.hasNext()) {
 				int j = itI.next();
 				Float rating = this.dataModel.getPreferenceValue(userID, this.itemMap.get(j));
-				if (rating != null && rating >= this.threshold) {
+				if (rating != null && rating > this.threshold) {
 					if (mandatory != null && mandatory.contains(j)) {
 						hasManda = true;
 					}
@@ -133,7 +133,7 @@ public class Bimax extends AbstractBiclusteringAlgorithm {
 			while (itI.hasNext()) {
 				int j = itI.next();
 				Float rating = this.dataModel.getPreferenceValue(curUserID, this.itemMap.get(j));
-				if (rating != null && rating >= this.threshold) {
+				if (rating != null && rating > this.threshold) {
 					bcU.addItem(j);
 				} else {
 					CV.add(j);
@@ -157,10 +157,10 @@ public class Bimax extends AbstractBiclusteringAlgorithm {
 					if (bicluster.containsItem(j)) {
 						float rating = pref.getValue();
 						Float ratingRef = this.dataModel.getPreferenceValue(curUserID, itemID);
-						if (rating >= this.threshold && (ratingRef != null && ratingRef >= this.threshold)) {
+						if (rating > this.threshold && (ratingRef != null && ratingRef > this.threshold)) {
 							inU = true;
 						}
-						if (rating >= this.threshold && (ratingRef == null || ratingRef < this.threshold)) {
+						if (rating > this.threshold && (ratingRef == null || ratingRef <= this.threshold)) {
 							inV = true;
 						}
 					}

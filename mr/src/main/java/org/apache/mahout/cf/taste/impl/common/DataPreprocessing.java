@@ -48,7 +48,7 @@ public class DataPreprocessing {
 			PreferenceArray a = new GenericUserPreferenceArray(model.getPreferencesFromUser(userID).length());
 			int id = 0;
 			for (Preference pref : model.getPreferencesFromUser(userID)) {
-				a.set(id, new GenericPreference(userID, pref.getItemID(), pref.getValue() >= threshold ? 1 : 0));
+				a.set(id, new GenericPreference(userID, pref.getItemID(), pref.getValue() > threshold ? 1 : 0));
 				id++;
 			}
 			userData.put(userID, a);

@@ -17,7 +17,7 @@ public class JaccardUserBiclusterSimilarity implements UserBiclusterSimilarity {
 	
 	public JaccardUserBiclusterSimilarity(DataModel dataModel) throws TasteException {
 		this.dataModel = dataModel;
-		this.threshold = 1;
+		this.threshold = 0;
 	}
 	
 	@Override
@@ -28,7 +28,7 @@ public class JaccardUserBiclusterSimilarity implements UserBiclusterSimilarity {
 		while (it.hasNext()) {
 			long itemID = it.next();
 			Float pref = this.dataModel.getPreferenceValue(userID, itemID);
-			if (pref != null && pref >= this.threshold) {
+			if (pref != null && pref > this.threshold) {
 				commonItems++;
 			}
 		}
