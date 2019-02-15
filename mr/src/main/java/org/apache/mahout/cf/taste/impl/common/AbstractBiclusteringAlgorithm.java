@@ -13,7 +13,7 @@ public abstract class AbstractBiclusteringAlgorithm {
 		this.bicl = new Biclustering<Long>();
 	}
 
-	abstract void run() throws TasteException;
+	public abstract void run() throws TasteException;
 
 	public Biclustering<Long> get() {
 		return this.bicl;

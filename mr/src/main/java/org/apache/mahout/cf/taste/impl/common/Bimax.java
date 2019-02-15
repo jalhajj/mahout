@@ -181,7 +181,7 @@ public class Bimax extends AbstractBiclusteringAlgorithm {
 	}
 
 	@Override
-	void run() throws TasteException {
+	public void run() throws TasteException {
 		/* Create initial bicluster which is the whole matrix */
 		IntBicluster bicluster = new IntBicluster(this.m);
 		LongPrimitiveIterator it;
