@@ -15,9 +15,9 @@ public class JaccardUserBiclusterSimilarity implements UserBiclusterSimilarity {
 	private final DataModel dataModel;
 	private final double threshold;
 	
-	public JaccardUserBiclusterSimilarity(DataModel dataModel, double threshold) throws TasteException {
+	public JaccardUserBiclusterSimilarity(DataModel dataModel) throws TasteException {
 		this.dataModel = dataModel;
-		this.threshold = threshold;
+		this.threshold = 1;
 	}
 	
 	@Override

@@ -26,26 +26,25 @@ public class Bimax extends AbstractBiclusteringAlgorithm {
 	private int minM;
 	private float threshold;
 
-	public Bimax(DataModel data, float thres) throws TasteException {
-		this(data, thres, 1, 1);
+	public Bimax(DataModel data) throws TasteException {
+		this(data, 1, 1);
 	}
 
 	/**
 	 * Performs a biclustering based on Bimax exhaustive divide and conquer search
 	 * 
-	 * @param data        User item matrix
-	 * @param thres       Threshold to obtain binary ratings
+	 * @param data        Binary user item matrix
 	 * @param minUserSize minimum number of users in a bicluster
 	 * @param minItemSize minimum number of items in a bicluster
 	 * @throws TasteException
 	 */
-	public Bimax(DataModel data, float thres, int minUserSize, int minItemSize) throws TasteException {
+	public Bimax(DataModel data, int minUserSize, int minItemSize) throws TasteException {
 		super(data);
 		Preconditions.checkArgument(minUserSize > 0,
 				"Minimum number of users in a bicluster must be greater than 1: " + minUserSize);
 		Preconditions.checkArgument(minItemSize > 0,
 				"Minimum number of items in a bicluster must be greater than 1: " + minItemSize);
-		this.threshold = thres;
+		this.threshold = 1;
 		this.n = data.getNumUsers();
 		this.m = data.getNumItems();
 		this.minN = minUserSize;
