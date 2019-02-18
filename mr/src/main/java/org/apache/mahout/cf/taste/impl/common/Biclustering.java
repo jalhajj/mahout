@@ -15,10 +15,6 @@ public class Biclustering<E> {
 		this.biclusters.add(b);
 	}
 	
-	Bicluster<E> get(int i) {
-		return this.biclusters.get(i);
-	}
-	
 	public int size() {
 		return this.biclusters.size();
 	}

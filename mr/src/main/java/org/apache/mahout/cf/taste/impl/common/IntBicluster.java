@@ -1,16 +1,10 @@
 package org.apache.mahout.cf.taste.impl.common;
 
-import java.util.List;
 import java.util.BitSet;
 
 public class IntBicluster extends Bicluster<Integer> {
 	
 	private BitSet isItemIn;
-	
-	IntBicluster(List<Integer> u, List<Integer> j) {
-		super(u, j);
-		this.isItemIn = null;
-	}
 	
 	IntBicluster() {
 		super();
