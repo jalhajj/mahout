@@ -1,0 +1,183 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.mahout.cf.taste.impl.recommender;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.concurrent.Callable;
+
+import org.apache.mahout.cf.taste.common.Refreshable;
+import org.apache.mahout.cf.taste.common.TasteException;
+import org.apache.mahout.cf.taste.impl.common.Bicluster;
+import org.apache.mahout.cf.taste.impl.common.FastByIDMap;
+import org.apache.mahout.cf.taste.impl.common.RefreshHelper;
+import org.apache.mahout.cf.taste.impl.model.GenericDataModel;
+import org.apache.mahout.cf.taste.impl.model.GenericPreference;
+import org.apache.mahout.cf.taste.impl.model.GenericUserPreferenceArray;
+import org.apache.mahout.cf.taste.impl.similarity.PearsonCorrelationSimilarity;
+import org.apache.mahout.cf.taste.model.DataModel;
+import org.apache.mahout.cf.taste.model.PreferenceArray;
+import org.apache.mahout.cf.taste.neighborhood.UserBiclusterNeighborhood;
+import org.apache.mahout.cf.taste.neighborhood.UserNeighborhood;
+import org.apache.mahout.cf.taste.recommender.IDRescorer;
+import org.apache.mahout.cf.taste.recommender.RecommendedItem;
+import org.apache.mahout.cf.taste.recommender.Recommender;
+import org.apache.mahout.cf.taste.similarity.ItemSimilarity;
+import org.apache.mahout.cf.taste.similarity.UserBiclusterSimilarity;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.Preconditions;
+
+/**
+ * <p>
+ * A simple {@link org.apache.mahout.cf.taste.recommender.Recommender} which
+ * uses a given {@link DataModel} and {@link UserNeighborhood} to produce
+ * recommendations.
+ * </p>
+ */
+public class BBCFRecommender extends AbstractRecommender {
+
+	private static final Logger log = LoggerFactory.getLogger(BBCFRecommender.class);
+
+	private final UserBiclusterNeighborhood neighborhood;
+	private final UserBiclusterSimilarity similarity;
+	private final RefreshHelper refreshHelper;
+	private FastByIDMap<Recommender> subrecs;
+
+	public BBCFRecommender(DataModel dataModel, UserBiclusterNeighborhood neighborhood,
+			UserBiclusterSimilarity similarity) {
+		super(dataModel);
+		Preconditions.checkArgument(neighborhood != null, "neighborhood is null");
+		this.neighborhood = neighborhood;
+		this.similarity = similarity;
+		try {
+			this.subrecs = new FastByIDMap<Recommender>(dataModel.getNumUsers());
+		} catch (TasteException e) {
+			this.subrecs = new FastByIDMap<Recommender>();
+		}
+		this.refreshHelper = new RefreshHelper(new Callable<Void>() {
+			@Override
+			public Void call() {
+				return null;
+			}
+		});
+		refreshHelper.addDependency(dataModel);
+		refreshHelper.addDependency(similarity);
+		refreshHelper.addDependency(neighborhood);
+	}
+
+	public UserBiclusterSimilarity getSimilarity() {
+		return similarity;
+	}
+
+	@Override
+	public List<RecommendedItem> recommend(long userID, int howMany, IDRescorer rescorer, boolean includeKnownItems)
+			throws TasteException {
+		Preconditions.checkArgument(howMany >= 1, "howMany must be at least 1");
+
+		log.debug("Recommending items for user ID '{}'", userID);
+
+		List<Bicluster<Long>> theNeighborhood = neighborhood.getUserNeighborhood(userID);
+
+		Recommender rec = getSubRec(userID, theNeighborhood);
+		if (rec != null) {
+			return rec.recommend(userID, howMany, rescorer, includeKnownItems);
+		} else {
+			return Collections.emptyList();
+		}
+	}
+
+	@Override
+	public float estimatePreference(long userID, long itemID) throws TasteException {
+		DataModel model = getDataModel();
+		Float actualPref = model.getPreferenceValue(userID, itemID);
+		if (actualPref != null) {
+			return actualPref;
+		}
+		List<Bicluster<Long>> theNeighborhood = neighborhood.getUserNeighborhood(userID);
+		return doEstimatePreference(userID, theNeighborhood, itemID);
+	}
+
+	private Recommender getSubRec(long userID, List<Bicluster<Long>> theNeighborhood) throws TasteException {
+
+		if (!subrecs.containsKey(userID)) {
+
+			if (theNeighborhood.size() == 0) {
+				return null;
+			}
+
+			DataModel model = getDataModel();
+			FastByIDMap<PreferenceArray> userData = new FastByIDMap<PreferenceArray>(model.getNumUsers());
+			Bicluster<Long> b = new Bicluster<Long>();
+			for (Bicluster<Long> otherb : theNeighborhood) {
+				b.merge(otherb);
+			}
+			Iterator<Long> itU = b.getUsers();
+			while (itU.hasNext()) {
+				long theuserID = itU.next();
+				PreferenceArray a = new GenericUserPreferenceArray(b.getNbItems());
+				int id = 0;
+				Iterator<Long> itI = b.getUsers();
+				while (itI.hasNext()) {
+					long theitemID = itI.next();
+					Float rating = model.getPreferenceValue(theuserID, theitemID);
+					if (rating != null) {
+						a.set(id, new GenericPreference(theuserID, theitemID, rating));
+						id++;
+					}
+				}
+				userData.put(theuserID, a);
+			}
+			DataModel submodel = new GenericDataModel(userData);
+
+			ItemSimilarity sim = new PearsonCorrelationSimilarity(submodel);
+			Recommender rec = new GenericItemBasedRecommender(model, sim,
+					new PreferredItemsNeighborhoodCandidateItemsStrategy(),
+					new PreferredItemsNeighborhoodCandidateItemsStrategy());
+
+			subrecs.put(userID, rec);
+			return rec;
+		} else {
+			return subrecs.get(userID);
+		}
+	}
+
+	protected float doEstimatePreference(long userID, List<Bicluster<Long>> theNeighborhood, long itemID)
+			throws TasteException {
+		Recommender rec = getSubRec(userID, theNeighborhood);
+		if (rec != null) {
+			return rec.estimatePreference(userID, itemID);
+		} else {
+			return Float.NaN;
+		}
+	}
+
+	@Override
+	public void refresh(Collection<Refreshable> alreadyRefreshed) {
+		refreshHelper.refresh(alreadyRefreshed);
+	}
+
+	@Override
+	public String toString() {
+		return "NBCFRecommender[neighborhood:" + neighborhood + ']';
+	}
+
+}

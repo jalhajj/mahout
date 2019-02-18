@@ -32,7 +32,7 @@ public class Bicluster<E> implements Comparable<Bicluster<E>> {
 		}
 	}
 	
-	Bicluster() {
+	public Bicluster() {
 		this.users = new HashSet<E>();
 		this.items = new HashSet<E>();
 	}
