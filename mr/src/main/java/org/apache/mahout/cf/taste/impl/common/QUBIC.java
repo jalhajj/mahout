@@ -23,6 +23,7 @@ public class QUBIC extends AbstractBiclusteringAlgorithm {
 
 	private float consistency;
 	private float overlap;
+	private int bcnt;
 
 	public QUBIC(DataModel model, float c, int o, float f) throws TasteException {
 		super(model);
@@ -33,6 +34,7 @@ public class QUBIC extends AbstractBiclusteringAlgorithm {
 		Preconditions.checkArgument(f >= 0 && f <= 1,
 				"Overlap degree must be between 0 (inclusive) and 1 (inclusive): " + f);
 		this.bicl = new TopSizeBiclustering<Long>(o);
+		this.bcnt = o;
 		this.consistency = c;
 		this.overlap = f;
 	}
@@ -71,6 +73,11 @@ public class QUBIC extends AbstractBiclusteringAlgorithm {
 
 		/* Consider all possible seeds */
 		while (seeds.size() != 0) {
+			
+			if (tmpbicl.size() >= this.bcnt) {
+				break;
+			}
+			
 			Seed s = seeds.remove();
 			long userID1 = s.getUserID1();
 			long userID2 = s.getUserID2();
