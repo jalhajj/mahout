@@ -110,7 +110,7 @@ public class BBCFRecommender extends AbstractRecommender {
 				long theuserID = itU.next();
 				PreferenceArray a = new GenericUserPreferenceArray(b.getNbItems());
 				int id = 0;
-				Iterator<Long> itI = b.getUsers();
+				Iterator<Long> itI = b.getItems();
 				while (itI.hasNext()) {
 					long theitemID = itI.next();
 					Float rating = model.getPreferenceValue(theuserID, theitemID);
