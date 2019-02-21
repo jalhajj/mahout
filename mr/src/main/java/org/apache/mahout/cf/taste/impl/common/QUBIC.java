@@ -41,8 +41,6 @@ public class QUBIC extends AbstractBiclusteringAlgorithm {
 
 	@Override
 	public void run() throws TasteException {
-		
-		Biclustering<Long> tmpbicl = new Biclustering<Long>();
 
 		/* Construct the graph */
 		log.debug("Building graph");
@@ -74,7 +72,7 @@ public class QUBIC extends AbstractBiclusteringAlgorithm {
 		/* Consider all possible seeds */
 		while (seeds.size() != 0) {
 			
-			if (tmpbicl.size() >= this.bcnt) {
+			if (this.bicl.size() >= this.bcnt) {
 				break;
 			}
 			
@@ -219,36 +217,29 @@ public class QUBIC extends AbstractBiclusteringAlgorithm {
 					}
 					
 				}
-				tmpbicl.add(b);
-				Iterator<Long> it = b.getUsers();
-				while (it.hasNext()) {
-					long userID = it.next();
-					if (!inBcl.containsKey(userID)) {
-						inBcl.put(userID, new ArrayList<Bicluster<Long>>());
+				/* Overlap post processing */
+				boolean doesOverlap = false;
+				Iterator<Bicluster<Long>> itb = this.bicl.iterator();
+				while (!doesOverlap && itb.hasNext()) {
+					Bicluster<Long> bb = itb.next();
+					if (b.overlap(bb) > this.overlap) {
+						doesOverlap = true;
 					}
-					inBcl.get(userID).add(b);
 				}
-				
+				if (!doesOverlap) {
+					this.bicl.add(b);
+					Iterator<Long> it = b.getUsers();
+					while (it.hasNext()) {
+						long userID = it.next();
+						if (!inBcl.containsKey(userID)) {
+							inBcl.put(userID, new ArrayList<Bicluster<Long>>());
+						}
+						inBcl.get(userID).add(b);
+					}
+				}
 				
 			}
 
-		}
-		
-		/* Overlap post processing */
-		Iterator<Bicluster<Long>> itb1 = tmpbicl.iterator();
-		while(itb1.hasNext()) {
-			boolean doesOverlap = false;
-			Bicluster<Long> b1 = itb1.next();
-			Iterator<Bicluster<Long>> itb2 = this.bicl.iterator();
-			while (!doesOverlap && itb2.hasNext()) {
-				Bicluster<Long> b2 = itb2.next();
-				if (b1.overlap(b2) > this.overlap) {
-					doesOverlap = true;
-				}
-			}
-			if (!doesOverlap) {
-				this.bicl.add(b1);
-			}
 		}
 
 	}
