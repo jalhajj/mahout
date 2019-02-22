@@ -77,4 +77,7 @@ public interface IRStatistics {
    */
   double getReach();
   
+  double getAdjustedPrecision();
+  double getAdjustedRecall();
+  
 }
