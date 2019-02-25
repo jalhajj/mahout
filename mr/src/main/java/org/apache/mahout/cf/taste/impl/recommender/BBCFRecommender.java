@@ -6,6 +6,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.Callable;
 
+import org.apache.mahout.cf.taste.common.NoSuchItemException;
+import org.apache.mahout.cf.taste.common.NoSuchUserException;
 import org.apache.mahout.cf.taste.common.Refreshable;
 import org.apache.mahout.cf.taste.common.TasteException;
 import org.apache.mahout.cf.taste.impl.common.Bicluster;
@@ -74,7 +76,13 @@ public class BBCFRecommender extends AbstractRecommender {
 
 		Recommender rec = getSubRec(userID, theNeighborhood);
 		if (rec != null) {
-			return rec.recommend(userID, howMany, rescorer, includeKnownItems);
+			try {
+				return rec.recommend(userID, howMany, rescorer, includeKnownItems);
+			} catch (NoSuchUserException nsue) {
+				return Collections.emptyList();
+			} catch (NoSuchItemException nsie) {
+				return Collections.emptyList();
+			}
 		} else {
 			return Collections.emptyList();
 		}
@@ -139,7 +147,13 @@ public class BBCFRecommender extends AbstractRecommender {
 			throws TasteException {
 		Recommender rec = getSubRec(userID, theNeighborhood);
 		if (rec != null) {
-			return rec.estimatePreference(userID, itemID);
+			try {
+				return rec.estimatePreference(userID, itemID);
+			} catch (NoSuchUserException nsue) {
+				return Float.NaN;
+			} catch (NoSuchItemException nsie) {
+				return Float.NaN;
+			}
 		} else {
 			return Float.NaN;
 		}
