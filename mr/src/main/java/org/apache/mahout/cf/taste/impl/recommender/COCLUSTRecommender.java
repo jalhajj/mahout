@@ -9,6 +9,7 @@ import java.util.concurrent.Callable;
 import com.google.common.base.Preconditions;
 import org.apache.mahout.cf.taste.common.Refreshable;
 import org.apache.mahout.cf.taste.common.TasteException;
+import org.apache.mahout.cf.taste.impl.common.Average;
 import org.apache.mahout.cf.taste.impl.common.FastByIDMap;
 import org.apache.mahout.cf.taste.impl.common.FastIDSet;
 import org.apache.mahout.cf.taste.impl.common.LongPrimitiveIterator;
@@ -269,6 +270,11 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 	 */
 	@Override
 	public float estimatePreference(long userID, long itemID) throws TasteException {
+		DataModel model = getDataModel();
+		Float actualPref = model.getPreferenceValue(userID, itemID);
+		if (actualPref != null) {
+			return actualPref;
+		}
 		double estimate;
 		if (this.Rho.containsKey(userID)) {
 			int g = this.Rho.get(userID).get();
@@ -309,43 +315,6 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 	@Override
 	public void refresh(Collection<Refreshable> alreadyRefreshed) {
 		refreshHelper.refresh(alreadyRefreshed);
-	}
-
-	private class Average {
-
-		private float sum;
-		private int cnt;
-		private float val;
-		private boolean valValid;
-
-		Average() {
-			this.sum = 0;
-			this.cnt = 0;
-			this.val = 0;
-			this.valValid = false;
-		}
-
-		Average(float value) {
-			this.sum = value;
-			this.cnt = 1;
-			this.val = value;
-			this.valValid = true;
-		}
-
-		void add(float value) {
-			this.sum += value;
-			this.cnt++;
-			this.valValid = false;
-		}
-
-		float compute() {
-			if (!this.valValid) {
-				this.val = this.sum / (float) this.cnt;
-				this.valValid = true;
-			}
-			return this.val;
-		}
-
 	}
 	
 	private class Index {

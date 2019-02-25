@@ -98,7 +98,7 @@ public class Bicluster<E> implements Comparable<Bicluster<E>> {
 		}
 	}
 	
-	public float overlap(Bicluster<E> other) {
+	public int nbCommonCells(Bicluster<E> other) {
 		Iterator<E> it;
 		int commonU = 0;
 		it = this.getUsers();
@@ -116,7 +116,12 @@ public class Bicluster<E> implements Comparable<Bicluster<E>> {
 				commonI++;
 			}
 		}
-		return (float) (commonU * commonI) / (float) (this.getNbUsers() * this.getNbItems());
+		return commonU * commonI;
+	}
+	
+	public float overlap(Bicluster<E> other) {
+		
+		return (float) nbCommonCells(other) / (float) (this.getNbUsers() * this.getNbItems());
 	}
 
 }

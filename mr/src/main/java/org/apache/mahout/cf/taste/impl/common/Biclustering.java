@@ -15,6 +15,10 @@ public class Biclustering<E> {
 		this.biclusters.add(b);
 	}
 	
+	void remove(Bicluster<E> b) {
+		this.biclusters.remove(b);
+	}
+	
 	public int size() {
 		return this.biclusters.size();
 	}
