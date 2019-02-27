@@ -162,6 +162,7 @@ public final class KFoldRecommenderIRStatsEvaluator implements RecommenderIRStat
 
 				PreferenceArray prefs = testPrefs.get(userID);
 				if (prefs == null) {
+					log.debug("Ignoring user {}", userID);
 					continue; // Oops we excluded all prefs for the user -- just move on
 				}
 				// List some most-preferred items that would count as (most) "relevant" results
@@ -188,18 +189,21 @@ public final class KFoldRecommenderIRStatsEvaluator implements RecommenderIRStat
 				int numRelevantItems = relevantItemIDs.size();
 				int numNotRelevantItems = notRelevantItemIDs.size();
 				if (numRelevantItems <= 0 || numNotRelevantItems <= 0) {
+					log.debug("Ignoring user {}", userID);
 					continue;
 				}
 
 				try {
 					trainingModel.getPreferencesFromUser(userID);
 				} catch (NoSuchUserException nsee) {
+					log.debug("Ignoring user {}", userID);
 					continue; // Oops we excluded all prefs for the user -- just move on
 				}
 
-//				int size = numRelevantItems + trainingModel.getItemIDsFromUser(userID).size() + numNotRelevantItems;
-//				if (size < 3 * at) {
+//				int size = numRelevantItems + trainingModel.getItemIDsFromUser(userID).size();
+//				if (size < 2 * at) {
 //					// Really not enough prefs to meaningfully evaluate this user
+//					log.debug("Ignoring user {}", userID);
 //					continue;
 //				}
 
@@ -208,6 +212,11 @@ public final class KFoldRecommenderIRStatsEvaluator implements RecommenderIRStat
 				int intersectionSize = 0;
 				List<RecommendedItem> recommendedItems = recommender.recommend(userID, at, rescorer);
 				for (RecommendedItem recommendedItem : recommendedItems) {
+					
+					if (recommendedItem.getValue() < theRelevanceThreshold) {
+						continue; // Ignore recommended item if actually not considered as a like
+					}
+					
 					if (relevantItemIDs.contains(recommendedItem.getItemID())) {
 						intersectionSize++;
 						adjNumRecommendedItems++;
@@ -216,6 +225,8 @@ public final class KFoldRecommenderIRStatsEvaluator implements RecommenderIRStat
 					}
 					numRecommendedItems++;
 				}
+				
+				log.debug("User {}: #rec {} / #relevant {} / #goodrec {}", userID, numRecommendedItems, numRelevantItems, intersectionSize);
 
 				// Precision
 				if (numRecommendedItems > 0) {
@@ -230,8 +241,7 @@ public final class KFoldRecommenderIRStatsEvaluator implements RecommenderIRStat
 				adjRecallFold.addDatum((double) intersectionSize / (double) adjNumRelevantItems);
 
 				// Fall-out
-				int size = prefs.length();
-				if (numRelevantItems < size) {
+				if (numRelevantItems < prefs.length()) {
 					fallOutFold.addDatum(
 							(double) (numRecommendedItems - intersectionSize) / (double) (numItems - numRelevantItems));
 				}
