@@ -35,9 +35,9 @@ public final class IRStatisticsImpl implements IRStatistics, Serializable {
 	
 	IRStatisticsImpl(double precision, double recall, double fallOut, double ndcg, double reach, double adjp, double adjr) {
 		this(precision, recall, fallOut, ndcg, reach);
-		Preconditions.checkArgument(Double.isNaN(precision) || (precision >= 0.0 && precision <= 1.0),
+		Preconditions.checkArgument(Double.isNaN(adjp) || (adjp >= 0.0 && adjp <= 1.0),
 				"Illegal adjusted precision: " + adjp + ". Must be: 0.0 <= precision <= 1.0 or NaN");
-		Preconditions.checkArgument(Double.isNaN(recall) || (recall >= 0.0 && recall <= 1.0),
+		Preconditions.checkArgument(Double.isNaN(adjr) || (adjr >= 0.0 && adjr <= 1.0),
 				"Illegal adjusted recall: " + adjr + ". Must be: 0.0 <= recall <= 1.0 or NaN");
 		this.adjPrecision = adjp;
 		this.adjRecall = adjr;
