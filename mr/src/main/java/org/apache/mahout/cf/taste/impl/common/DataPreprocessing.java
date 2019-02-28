@@ -56,5 +56,24 @@ public class DataPreprocessing {
 		return new GenericDataModel(userData);
 		
 	}
+	
+public static DataModel discretize(DataModel model, int shift) throws TasteException {
+		
+		FastByIDMap<PreferenceArray> userData = new FastByIDMap<PreferenceArray>(model.getNumUsers());
+		LongPrimitiveIterator it;
+		it = model.getUserIDs();
+		while (it.hasNext()) {
+			long userID = it.nextLong();
+			PreferenceArray a = new GenericUserPreferenceArray(model.getPreferencesFromUser(userID).length());
+			int id = 0;
+			for (Preference pref : model.getPreferencesFromUser(userID)) {
+				a.set(id, new GenericPreference(userID, pref.getItemID(), Math.round(pref.getValue()) + shift));
+				id++;
+			}
+			userData.put(userID, a);
+		}
+		return new GenericDataModel(userData);
+		
+	}
 
 }

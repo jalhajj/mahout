@@ -116,7 +116,6 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 
 		DataModel dataModel = getDataModel();
 		LongPrimitiveIterator itU;
-		LongPrimitiveIterator itI;
 
 		/* Randomly initialize biclusters */
 		log.info("Starting with random biclusters");
@@ -143,7 +142,17 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 				}
 			}
 		}
+		
+		iterate(this.nbMaxIterations);
+	
+	}
+	
+	public int iterate(int iter) throws TasteException {
 
+		DataModel dataModel = getDataModel();
+		LongPrimitiveIterator itU;
+		LongPrimitiveIterator itI;
+		
 		/* Repeat until convergence */
 		int iterNb = 0;
 		int nbChanged = 0;
@@ -246,7 +255,8 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 			}
 			
 			iterNb++;
-		} while (iterNb < this.nbMaxIterations && nbChanged > 0);
+		} while (iterNb < iter && nbChanged > 0);
+		return iterNb;
 	}
 
 	@Override

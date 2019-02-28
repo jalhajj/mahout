@@ -32,7 +32,8 @@ import org.slf4j.LoggerFactory;
 
 public abstract class AbstractKFoldRecommenderEvaluator extends AbstractDifferenceRecommenderEvaluator {
 
-private final Random random;
+private Random random;
+private final long seed;
 public double noEstimateCounterAverage = 0.0;
 public double totalEstimateCount = 0.0;
 public double totalEstimateCountAverage = 0.0;
@@ -42,7 +43,13 @@ private static final Logger log = LoggerFactory
 
 public AbstractKFoldRecommenderEvaluator() {
     super();
+    this.seed = 0;
     random = RandomUtils.getRandom();
+}
+
+public AbstractKFoldRecommenderEvaluator(long seed) {
+    super();
+    this.seed = seed;
 }
 
 public double getNoEstimateCounterAverage(){
@@ -78,6 +85,10 @@ public double evaluate(RecommenderBuilder recommenderBuilder,
 
     log.info("Beginning evaluation using {} of {}", trainingPercentage,
             dataModel);
+    
+    if (this.seed != 0) {
+    	random = RandomUtils.getRandom(seed);
+    }
 
     int numUsers = dataModel.getNumUsers();
 
@@ -208,60 +219,6 @@ public double evaluate(RecommenderBuilder recommenderBuilder,
 }
 
 /**
- * Split the preference values for one user into K folds, randomly
- * Generate random number until is not the same as the previously generated on
- * in order to make sure that at least two buckets are populated.
- * 
- * @param k
- * @param folds
- * @param userID
- * @param dataModel
- * @throws TasteException
- */
-private void splitOneUsersPrefs(int k,
-        List<FastByIDMap<PreferenceArray>> folds, long userID,
-        DataModel dataModel) throws TasteException {
-
-    List<List<Preference>> oneUserPrefs = Lists.newArrayListWithCapacity(k + 1);
-    for (int i = 0; i < k; i++) {
-        oneUserPrefs.add(null);
-    }
-
-    PreferenceArray prefs = dataModel.getPreferencesFromUser(userID);
-
-    int size = prefs.length();
-    int previousBucket = -1;
-    Double rand = -2.0;
-    for (int i = 0; i < size; i++) {
-        Preference newPref = new GenericPreference(userID,
-                prefs.getItemID(i), prefs.getValue(i));
-        do {
-            rand = random.nextDouble() * k * 10;
-
-            rand = (double) Math.floor(rand / 10);
-            // System.out.println("inside Rand "+rand);
-
-        } while (rand.intValue() == previousBucket);
-        // System.out.println("outside rand "+rand);
-        if (oneUserPrefs.get(rand.intValue()) == null) {
-            oneUserPrefs.set(rand.intValue(), new ArrayList<Preference>());
-        }
-        oneUserPrefs.get(rand.intValue()).add(newPref);
-
-        previousBucket = rand.intValue();
-
-    }
-
-    for (int i = 0; i < k; i++) {
-        if (oneUserPrefs.get(i) != null) {
-            folds.get(i).put(userID,
-                    new GenericUserPreferenceArray(oneUserPrefs.get(i)));
-        }
-    }
-
-}
-
-/**
  * Split the preference values for one user into K folds, by shuffling.
  * First Shuffle the Preference array for the user. Then distribute the item-preference pairs
  * starting from the first buckets to the k-th bucket, and then start from the beggining.
@@ -290,7 +247,7 @@ private void splitOneUsersPrefs2(int k, List<FastByIDMap<PreferenceArray>> folds
     }
 
     // Shuffle the items
-    Collections.shuffle(userPrefs);
+    Collections.shuffle(userPrefs, this.random);
 
     int currentBucket = 0;
     for (int i = 0; i < size; i++) {

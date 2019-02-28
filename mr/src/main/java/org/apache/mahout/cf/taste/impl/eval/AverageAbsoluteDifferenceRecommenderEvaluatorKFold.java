@@ -9,6 +9,14 @@ public final class AverageAbsoluteDifferenceRecommenderEvaluatorKFold extends
   
   private RunningAverage average;
   
+  public AverageAbsoluteDifferenceRecommenderEvaluatorKFold() {
+	  super();
+  }
+  
+  public AverageAbsoluteDifferenceRecommenderEvaluatorKFold(long seed) {
+	  super(seed);
+  }
+  
   @Override
   protected void reset() {
     average = new FullRunningAverage();

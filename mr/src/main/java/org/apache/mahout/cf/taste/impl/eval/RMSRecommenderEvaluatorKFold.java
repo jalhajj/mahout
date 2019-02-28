@@ -7,7 +7,14 @@ import org.apache.mahout.cf.taste.model.Preference;
 public final class RMSRecommenderEvaluatorKFold extends AbstractKFoldRecommenderEvaluator {
 
   private RunningAverage average;
+  
+  public RMSRecommenderEvaluatorKFold() {
+	  super();
+  }
 
+  public RMSRecommenderEvaluatorKFold(long seed) {
+	  super(seed);
+  }
 
   @Override
   protected void reset() {
