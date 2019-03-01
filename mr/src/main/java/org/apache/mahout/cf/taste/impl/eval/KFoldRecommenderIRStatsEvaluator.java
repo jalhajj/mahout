@@ -224,9 +224,9 @@ public final class KFoldRecommenderIRStatsEvaluator implements RecommenderIRStat
 				
 				for (RecommendedItem recommendedItem : recommendedItems) {
 					
-					if (recommendedItem.getValue() < theRelevanceThreshold) {
-						continue; // Ignore recommended item if actually not considered as a like
-					}
+//					if (recommendedItem.getValue() < theRelevanceThreshold) {
+//						continue; // Ignore recommended item if actually not considered as a like
+//					}
 					
 					if (relevantItemIDs.contains(recommendedItem.getItemID())) {
 						intersectionSize++;
@@ -248,8 +248,12 @@ public final class KFoldRecommenderIRStatsEvaluator implements RecommenderIRStat
 				}
 
 				// Recall
-				recallFold.addDatum((double) intersectionSize / (double) numRelevantItems);
-				adjRecallFold.addDatum((double) intersectionSize / (double) adjNumRelevantItems);
+				if (numRelevantItems > 0) {
+					recallFold.addDatum((double) intersectionSize / (double) numRelevantItems);
+				}
+				if (adjNumRelevantItems > 0) {
+					adjRecallFold.addDatum((double) intersectionSize / (double) adjNumRelevantItems);
+				}
 
 				// Fall-out
 				if (numRelevantItems < prefs.length()) {
