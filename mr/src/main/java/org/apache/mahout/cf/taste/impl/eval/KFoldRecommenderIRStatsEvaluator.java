@@ -211,6 +211,17 @@ public final class KFoldRecommenderIRStatsEvaluator implements RecommenderIRStat
 				int adjNumRecommendedItems = 0;
 				int intersectionSize = 0;
 				List<RecommendedItem> recommendedItems = recommender.recommend(userID, at, rescorer);
+				
+//				log.info("Recommended items are {}", recommendedItems);
+//				List<Float> relevantScores = new ArrayList<Float>(relevantItemIDs.size());
+//				List<Float> trueScores = new ArrayList<Float>(relevantItemIDs.size());
+//				for (long itemID : relevantItemIDs) {
+//					relevantScores.add(recommender.estimatePreference(userID, itemID));
+//					trueScores.add(dataModel.getPreferenceValue(userID, itemID));
+//					
+//				}
+//				log.info("Relevant items are {}, their predicted scores are {}, true scores are {}", relevantItemIDs, relevantScores, trueScores);
+				
 				for (RecommendedItem recommendedItem : recommendedItems) {
 					
 					if (recommendedItem.getValue() < theRelevanceThreshold) {
