@@ -304,6 +304,32 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 		}
 		return (float) estimate;
 	}
+	
+	public double getTrainingError() throws TasteException {
+		
+		double sum = 0;
+		
+		DataModel dataModel = getDataModel();
+		LongPrimitiveIterator it = dataModel.getUserIDs();
+		while (it.hasNext()) {
+			long userID = it.nextLong();
+			int g = this.Rho.get(userID).get();
+			PreferenceArray prefs = dataModel.getPreferencesFromUser(userID);
+			if (prefs != null) {
+				for (Preference pref : prefs) {
+					long itemID = pref.getItemID();
+					int h = this.Gamma.get(itemID).get();
+					float rating = pref.getValue();
+					float x = rating - this.ACOC.get(g).get(h).compute() - this.AR.get(userID).compute()
+							+ this.ARC.get(g).compute() - this.AC.get(itemID).compute()
+							+ this.ACC.get(h).compute();
+					sum += x * x;
+				}
+			}
+		}
+		return sum;
+		
+	}
 
 	private final class Estimator implements TopItems.Estimator<Long> {
 
