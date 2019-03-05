@@ -1,7 +1,9 @@
 package org.apache.mahout.cf.taste.impl.eval;
 
+import org.apache.mahout.cf.taste.common.TasteException;
 import org.apache.mahout.cf.taste.impl.common.FullRunningAverage;
 import org.apache.mahout.cf.taste.impl.common.RunningAverage;
+import org.apache.mahout.cf.taste.model.DataModel;
 import org.apache.mahout.cf.taste.model.Preference;
 
 public final class AverageAbsoluteDifferenceRecommenderEvaluatorKFold extends
@@ -9,12 +11,8 @@ public final class AverageAbsoluteDifferenceRecommenderEvaluatorKFold extends
   
   private RunningAverage average;
   
-  public AverageAbsoluteDifferenceRecommenderEvaluatorKFold() {
-	  super();
-  }
-  
-  public AverageAbsoluteDifferenceRecommenderEvaluatorKFold(long seed) {
-	  super(seed);
+  public AverageAbsoluteDifferenceRecommenderEvaluatorKFold(DataModel dataModel, int nbFolds) throws TasteException {
+	  super(dataModel, nbFolds);
   }
   
   @Override

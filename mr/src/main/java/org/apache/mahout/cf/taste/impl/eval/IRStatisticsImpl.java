@@ -29,21 +29,11 @@ public final class IRStatisticsImpl implements IRStatistics, Serializable {
 	private final double recall;
 	private final double fallOut;
 	private final double ndcg;
-	private final double reach;
-	private double adjPrecision;
-	private double adjRecall;
-	
-	IRStatisticsImpl(double precision, double recall, double fallOut, double ndcg, double reach, double adjp, double adjr) {
-		this(precision, recall, fallOut, ndcg, reach);
-		Preconditions.checkArgument(Double.isNaN(adjp) || (adjp >= 0.0 && adjp <= 1.0),
-				"Illegal adjusted precision: " + adjp + ". Must be: 0.0 <= precision <= 1.0 or NaN");
-		Preconditions.checkArgument(Double.isNaN(adjr) || (adjr >= 0.0 && adjr <= 1.0),
-				"Illegal adjusted recall: " + adjr + ". Must be: 0.0 <= recall <= 1.0 or NaN");
-		this.adjPrecision = adjp;
-		this.adjRecall = adjr;
-	}
+	private final double reachAtLeastOne;
+	private final double reachAll;
+	private final double itemCoverage;
 
-	IRStatisticsImpl(double precision, double recall, double fallOut, double ndcg, double reach) {
+	IRStatisticsImpl(double precision, double recall, double fallOut, double ndcg, double reachAtLeastOne, double reachAll, double itemCoverage) {
 		Preconditions.checkArgument(Double.isNaN(precision) || (precision >= 0.0 && precision <= 1.0),
 				"Illegal precision: " + precision + ". Must be: 0.0 <= precision <= 1.0 or NaN");
 		Preconditions.checkArgument(Double.isNaN(recall) || (recall >= 0.0 && recall <= 1.0),
@@ -52,15 +42,23 @@ public final class IRStatisticsImpl implements IRStatistics, Serializable {
 				"Illegal fallOut: " + fallOut + ". Must be: 0.0 <= fallOut <= 1.0 or NaN");
 		Preconditions.checkArgument(Double.isNaN(ndcg) || (ndcg >= 0.0 && ndcg <= 1.0),
 				"Illegal nDCG: " + ndcg + ". Must be: 0.0 <= nDCG <= 1.0 or NaN");
-		Preconditions.checkArgument(Double.isNaN(reach) || (reach >= 0.0 && reach <= 1.0),
-				"Illegal reach: " + reach + ". Must be: 0.0 <= reach <= 1.0 or NaN");
+		Preconditions.checkArgument(Double.isNaN(reachAtLeastOne) || (reachAtLeastOne >= 0.0 && reachAtLeastOne <= 1.0),
+				"Illegal reachAtLeastOne: " + reachAtLeastOne + ". Must be: 0.0 <= reachAtLeastOne <= 1.0 or NaN");
+		Preconditions.checkArgument(Double.isNaN(reachAll) || (reachAll >= 0.0 && reachAll <= 1.0),
+				"Illegal reachAll: " + reachAll + ". Must be: 0.0 <= reachAll <= 1.0 or NaN");
+		Preconditions.checkArgument(Double.isNaN(itemCoverage) || (itemCoverage >= 0.0 && itemCoverage <= 1.0),
+				"Illegal itemCoverage: " + itemCoverage + ". Must be: 0.0 <= itemCoverage <= 1.0 or NaN");
 		this.precision = precision;
 		this.recall = recall;
 		this.fallOut = fallOut;
 		this.ndcg = ndcg;
-		this.reach = reach;
-		this.adjPrecision = Double.NaN;
-		this.adjRecall = Double.NaN;
+		this.reachAtLeastOne = reachAtLeastOne;
+		this.reachAll = reachAll;
+		this.itemCoverage = itemCoverage;
+	}
+
+	IRStatisticsImpl(double precision, double recall, double fallOut, double ndcg, double reach) {
+		this(precision, recall, fallOut, ndcg, reach, Double.NaN, Double.NaN);
 	}
 
 	@Override
@@ -96,24 +94,24 @@ public final class IRStatisticsImpl implements IRStatistics, Serializable {
 	}
 
 	@Override
-	public double getReach() {
-		return reach;
+	public double getReachAtLeastOne() {
+		return reachAtLeastOne;
+	}
+	
+	@Override
+	public double getReachAll() {
+		return reachAll;
+	}
+	
+	@Override
+	public double getItemCoverage() {
+		return itemCoverage;
 	}
 
 	@Override
 	public String toString() {
 		return "IRStatisticsImpl[precision:" + precision + ",recall:" + recall + ",fallOut:" + fallOut + ",nDCG:" + ndcg
-				+ ",reach:" + reach + ",adjusted precision:" + adjPrecision+ ",adjusted recall:" + adjRecall + ']';
-	}
-
-	@Override
-	public double getAdjustedPrecision() {
-		return adjPrecision;
-	}
-
-	@Override
-	public double getAdjustedRecall() {
-		return adjRecall;
+				+ ",reachAtLeastOne:" + reachAtLeastOne + ",reachAll:" + reachAll + ']';
 	}
 
 }

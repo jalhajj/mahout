@@ -73,11 +73,18 @@ public interface IRStatistics {
   double getNormalizedDiscountedCumulativeGain();
   
   /**
-   * @return the fraction of all users for whom recommendations could be produced
+   * @return the fraction of all users for whom at least one recommendation could be produced
    */
-  double getReach();
+  double getReachAtLeastOne();
   
-  double getAdjustedPrecision();
-  double getAdjustedRecall();
+  /**
+   * @return the fraction of all users for whom all recommendations could be produced
+   */
+  double getReachAll();
+  
+  /**
+   * @return the fraction of items that were provided as recommendations
+   */
+  double getItemCoverage();
   
 }
