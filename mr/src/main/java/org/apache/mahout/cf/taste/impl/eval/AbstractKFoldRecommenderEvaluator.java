@@ -89,7 +89,7 @@ public abstract class AbstractKFoldRecommenderEvaluator {
 			DataModel trainingModel = fold.getTraining();
 			FastByIDMap<PreferenceArray> testPrefs = fold.getTesting();
 
-			Recommender recommender = recommenderBuilder.buildRecommender(trainingModel);
+			Recommender recommender = recommenderBuilder.buildRecommender(trainingModel, fold);
 
 			Double[] retVal = getEvaluation(testPrefs, recommender);
 			double intermediate = retVal[0];

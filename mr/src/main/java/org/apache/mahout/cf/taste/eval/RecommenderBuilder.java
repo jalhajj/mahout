@@ -18,6 +18,7 @@
 package org.apache.mahout.cf.taste.eval;
 
 import org.apache.mahout.cf.taste.common.TasteException;
+import org.apache.mahout.cf.taste.impl.eval.Fold;
 import org.apache.mahout.cf.taste.model.DataModel;
 import org.apache.mahout.cf.taste.recommender.Recommender;
 
@@ -41,5 +42,7 @@ public interface RecommenderBuilder {
    *           if an error occurs while accessing the {@link DataModel}
    */
   Recommender buildRecommender(DataModel dataModel) throws TasteException;
+  
+  Recommender buildRecommender(DataModel dataModel, Fold fold) throws TasteException;
   
 }

@@ -20,6 +20,7 @@ import org.apache.mahout.cf.taste.impl.similarity.PearsonCorrelationSimilarity;
 import org.apache.mahout.cf.taste.model.DataModel;
 import org.apache.mahout.cf.taste.model.PreferenceArray;
 import org.apache.mahout.cf.taste.neighborhood.UserBiclusterNeighborhood;
+import org.apache.mahout.cf.taste.recommender.CandidateItemsStrategy;
 import org.apache.mahout.cf.taste.recommender.IDRescorer;
 import org.apache.mahout.cf.taste.recommender.RecommendedItem;
 import org.apache.mahout.cf.taste.recommender.Recommender;
@@ -42,6 +43,28 @@ public class BBCFRecommender extends AbstractRecommender {
 	public BBCFRecommender(DataModel dataModel, UserBiclusterNeighborhood neighborhood,
 			UserBiclusterSimilarity similarity) {
 		super(dataModel);
+		Preconditions.checkArgument(neighborhood != null, "neighborhood is null");
+		this.neighborhood = neighborhood;
+		this.similarity = similarity;
+		try {
+			this.subrecs = new FastByIDMap<Recommender>(dataModel.getNumUsers());
+		} catch (TasteException e) {
+			this.subrecs = new FastByIDMap<Recommender>();
+		}
+		this.refreshHelper = new RefreshHelper(new Callable<Void>() {
+			@Override
+			public Void call() {
+				return null;
+			}
+		});
+		refreshHelper.addDependency(dataModel);
+		refreshHelper.addDependency(similarity);
+		refreshHelper.addDependency(neighborhood);
+	}
+	
+	public BBCFRecommender(DataModel dataModel, UserBiclusterNeighborhood neighborhood,
+			UserBiclusterSimilarity similarity, CandidateItemsStrategy strategy) {
+		super(dataModel, strategy);
 		Preconditions.checkArgument(neighborhood != null, "neighborhood is null");
 		this.neighborhood = neighborhood;
 		this.similarity = similarity;

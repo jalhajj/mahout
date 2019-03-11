@@ -65,7 +65,7 @@ public final class KFoldRecommenderIRStatsEvaluator {
 			DataModel trainingModel = fold.getTraining();
 			FastByIDMap<PreferenceArray> testPrefs = fold.getTesting();
 
-			Recommender recommender = recommenderBuilder.buildRecommender(trainingModel);
+			Recommender recommender = recommenderBuilder.buildRecommender(trainingModel, fold);
 
 			RunningAverage precisionFold = new FullRunningAverage();
 			RunningAverage recallFold = new FullRunningAverage();

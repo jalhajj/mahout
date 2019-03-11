@@ -16,6 +16,7 @@ import org.apache.mahout.cf.taste.impl.recommender.AbstractRecommender;
 import org.apache.mahout.cf.taste.impl.recommender.TopItems;
 import org.apache.mahout.cf.taste.model.DataModel;
 import org.apache.mahout.cf.taste.model.PreferenceArray;
+import org.apache.mahout.cf.taste.recommender.CandidateItemsStrategy;
 import org.apache.mahout.cf.taste.recommender.IDRescorer;
 import org.apache.mahout.cf.taste.recommender.RecommendedItem;
 import org.slf4j.Logger;
@@ -42,6 +43,13 @@ public final class BicaiNetRecommender extends AbstractRecommender {
 	public BicaiNetRecommender(DataModel dataModel, Biclustering<Long> biclusters) throws TasteException {
 
 		super(dataModel);
+		this.biclusters = biclusters;
+
+	}
+	
+	public BicaiNetRecommender(DataModel dataModel, Biclustering<Long> biclusters, CandidateItemsStrategy strategy) throws TasteException {
+
+		super(dataModel, strategy);
 		this.biclusters = biclusters;
 
 	}
