@@ -192,8 +192,13 @@ public class GenericUserBasedRecommender extends AbstractRecommender implements 
 			throws TasteException {
 		DataModel dataModel = getDataModel();
 		FastIDSet possibleItemIDs = new FastIDSet();
+		FastIDSet candidateItemIDs = getAllOtherItems(theUserID, getDataModel().getPreferencesFromUser(theUserID), includeKnownItems);
 		for (long userID : theNeighborhood) {
-			possibleItemIDs.addAll(dataModel.getItemIDsFromUser(userID));
+			for (long itemID : dataModel.getItemIDsFromUser(userID)) {
+				if (candidateItemIDs.contains(itemID)) {
+					possibleItemIDs.add(itemID);
+				}
+			}
 		}
 		if (!includeKnownItems) {
 			possibleItemIDs.removeAll(dataModel.getItemIDsFromUser(theUserID));
