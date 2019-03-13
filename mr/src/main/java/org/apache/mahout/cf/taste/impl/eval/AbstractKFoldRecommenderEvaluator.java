@@ -19,6 +19,7 @@ import com.google.common.collect.Lists;
 import org.apache.mahout.cf.taste.common.NoSuchItemException;
 import org.apache.mahout.cf.taste.common.NoSuchUserException;
 import org.apache.mahout.cf.taste.common.TasteException;
+import org.apache.mahout.cf.taste.eval.FoldDataSplitter;
 import org.apache.mahout.cf.taste.eval.RecommenderBuilder;
 import org.apache.mahout.cf.taste.impl.common.FastByIDMap;
 import org.apache.mahout.cf.taste.impl.common.FullRunningAverageAndStdDev;
@@ -45,7 +46,15 @@ public abstract class AbstractKFoldRecommenderEvaluator {
 		Preconditions.checkArgument(nbFolds > 1, "nbFolds must be > 1");
 
 		this.dataModel = dataModel;
-		this.folds = new FoldDataSplitter(dataModel, nbFolds);
+		this.folds = new KFoldDataSplitter(dataModel, nbFolds);
+	}
+	
+	public AbstractKFoldRecommenderEvaluator(DataModel dataModel, FoldDataSplitter splitter) throws TasteException {
+		Preconditions.checkArgument(dataModel != null, "dataModel is null");
+		Preconditions.checkArgument(splitter != null, "splitter is null");
+
+		this.dataModel = dataModel;
+		this.folds = splitter;
 	}
 
 	public double getNoEstimateCounterAverage() {

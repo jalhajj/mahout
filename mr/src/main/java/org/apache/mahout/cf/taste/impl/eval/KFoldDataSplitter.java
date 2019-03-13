@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.mahout.cf.taste.common.TasteException;
+import org.apache.mahout.cf.taste.eval.FoldDataSplitter;
 import org.apache.mahout.cf.taste.impl.common.FastByIDMap;
 import org.apache.mahout.cf.taste.impl.common.LongPrimitiveIterator;
 import org.apache.mahout.cf.taste.impl.model.GenericPreference;
@@ -18,11 +19,11 @@ import org.apache.mahout.cf.taste.model.PreferenceArray;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 
-public class FoldDataSplitter {
+final public class KFoldDataSplitter implements FoldDataSplitter {
 
 	private final List<Fold> folds;
 
-	public FoldDataSplitter(DataModel dataModel, int nbFolds) throws TasteException {
+	public KFoldDataSplitter(DataModel dataModel, int nbFolds) throws TasteException {
 		Preconditions.checkArgument(dataModel != null, "dataModel is null");
 		Preconditions.checkArgument(nbFolds > 1, "nbFolds must be > 1");
 
@@ -80,6 +81,7 @@ public class FoldDataSplitter {
 
 	}
 
+	@Override
 	public Iterator<Fold> getFolds() {
 		return this.folds.iterator();
 	}

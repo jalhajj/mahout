@@ -82,8 +82,13 @@ public abstract class AbstractRecommender implements Recommender {
    * <p> Delegates to {@link Recommender#recommend(long, int, IDRescorer, boolean)}
    */
   @Override
-  public List<RecommendedItem> recommend(long userID, int howMany, IDRescorer rescorer) throws TasteException{
+  public List<RecommendedItem> recommend(long userID, int howMany, IDRescorer rescorer) throws TasteException {
     return recommend(userID, howMany,rescorer, false);  
+  }
+  
+  @Override
+  public FastIDSet getCandidateItems(long userID) throws TasteException {
+	  return candidateItemsStrategy.getCandidateItems(userID, dataModel.getPreferencesFromUser(userID), dataModel, false);
   }
   
   /**
