@@ -1,5 +1,6 @@
 package org.apache.mahout.cf.taste.impl.eval;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import org.apache.mahout.cf.taste.common.NoSuchUserException;
@@ -39,7 +40,7 @@ public final class KFoldRecommenderIRStatsEvaluator {
 		this.dataModel = dataModel;
 		this.folds = new KFoldDataSplitter(dataModel, nbFolds);
 	}
-	
+
 	public KFoldRecommenderIRStatsEvaluator(DataModel dataModel, FoldDataSplitter splitter) throws TasteException {
 		Preconditions.checkArgument(dataModel != null, "dataModel is null");
 		Preconditions.checkArgument(splitter != null, "splitter is null");
@@ -65,6 +66,21 @@ public final class KFoldRecommenderIRStatsEvaluator {
 		RunningAverage reachAll = new FullRunningAverage();
 		RunningAverage itemCoverage = new FullRunningAverage();
 
+		List<RunningAverage> precisionList = new ArrayList<RunningAverage>(11);
+		List<RunningAverage> recallList = new ArrayList<RunningAverage>(11);
+		List<RunningAverage> fallOutList = new ArrayList<RunningAverage>(11);
+		List<RunningAverage> nDCGList = new ArrayList<RunningAverage>(11);
+		List<RunningAverage> reachAtLeastOneList = new ArrayList<RunningAverage>(11);
+		List<RunningAverage> reachAllList = new ArrayList<RunningAverage>(11);
+		for (int group = 0; group < 11; group++) {
+			precisionList.add(new FullRunningAverage());
+			recallList.add(new FullRunningAverage());
+			fallOutList.add(new FullRunningAverage());
+			nDCGList.add(new FullRunningAverage());
+			reachAtLeastOneList.add(new FullRunningAverage());
+			reachAllList.add(new FullRunningAverage());
+		}
+
 		Iterator<Fold> itF = this.folds.getFolds();
 		int k = 0;
 		while (itF.hasNext()) {
@@ -84,12 +100,32 @@ public final class KFoldRecommenderIRStatsEvaluator {
 			int numUsersWithRecommendations = 0;
 			int numUsersWithAllRecommendations = 0;
 
+			List<RunningAverage> precisionFoldList = new ArrayList<RunningAverage>(11);
+			List<RunningAverage> recallFoldList = new ArrayList<RunningAverage>(11);
+			List<RunningAverage> fallOutFoldList = new ArrayList<RunningAverage>(11);
+			List<RunningAverage> nDCGFoldList = new ArrayList<RunningAverage>(11);
+			List<Integer> numUsersRecommendedForList = new ArrayList<Integer>(11);
+			List<Integer> numUsersWithRecommendationsList = new ArrayList<Integer>(11);
+			List<Integer> numUsersWithAllRecommendationsList = new ArrayList<Integer>(11);
+			for (int group = 0; group < 11; group++) {
+				precisionFoldList.add(new FullRunningAverage());
+				recallFoldList.add(new FullRunningAverage());
+				fallOutFoldList.add(new FullRunningAverage());
+				nDCGFoldList.add(new FullRunningAverage());
+				numUsersRecommendedForList.add(0);
+				numUsersWithRecommendationsList.add(0);
+				numUsersWithAllRecommendationsList.add(0);
+			}
+
 			FastIDSet recItems = new FastIDSet();
 
 			LongPrimitiveIterator it = dataModel.getUserIDs();
 			while (it.hasNext()) {
 
 				long userID = it.nextLong();
+
+				FastIDSet candidateItemsIDs = recommender.getCandidateItems(userID);
+				int numCandidateItems = candidateItemsIDs.size();
 
 				PreferenceArray prefs = testPrefs.get(userID);
 				if (prefs == null) {
@@ -133,19 +169,25 @@ public final class KFoldRecommenderIRStatsEvaluator {
 				log.debug("User {}: #rec {} / #relevant {} / #goodrec {}", userID, numRecommendedItems,
 						numRelevantItems, intersectionSize);
 
+				int group = getGroup((double) numRelevantItems / (double) numCandidateItems);
+
 				// Precision
 				if (numRecommendedItems > 0) {
 					precisionFold.addDatum((double) intersectionSize / (double) numRecommendedItems);
+					precisionFoldList.get(group).addDatum((double) intersectionSize / (double) numRecommendedItems);
 				}
 
 				// Recall
 				if (numRelevantItems > 0) {
 					recallFold.addDatum((double) intersectionSize / (double) numRelevantItems);
+					recallFoldList.get(group).addDatum((double) intersectionSize / (double) numRelevantItems);
 				}
 
 				// Fall-out
 				if (numRelevantItems < prefs.length()) {
 					fallOutFold.addDatum(
+							(double) (numRecommendedItems - intersectionSize) / (double) (numItems - numRelevantItems));
+					fallOutFoldList.get(group).addDatum(
 							(double) (numRecommendedItems - intersectionSize) / (double) (numItems - numRelevantItems));
 				}
 
@@ -171,15 +213,19 @@ public final class KFoldRecommenderIRStatsEvaluator {
 				}
 				if (idealizedGain > 0.0) {
 					nDCGFold.addDatum(cumulativeGain / idealizedGain);
+					nDCGFoldList.get(group).addDatum(cumulativeGain / idealizedGain);
 				}
 
 				// Reach
 				numUsersRecommendedFor++;
+				numUsersRecommendedForList.set(group, numUsersRecommendedForList.get(group) + 1);
 				if (numRecommendedItems > 0) {
 					numUsersWithRecommendations++;
+					numUsersWithRecommendationsList.set(group, numUsersWithRecommendationsList.get(group) + 1);
 				}
 				if (numRecommendedItems >= at) {
 					numUsersWithAllRecommendations++;
+					numUsersWithAllRecommendationsList.set(group, numUsersWithAllRecommendationsList.get(group) + 1);
 				}
 
 			}
@@ -191,6 +237,17 @@ public final class KFoldRecommenderIRStatsEvaluator {
 			reachAtLeastOne.addDatum((double) numUsersWithRecommendations / (double) numUsersRecommendedFor);
 			reachAll.addDatum((double) numUsersWithAllRecommendations / (double) numUsersRecommendedFor);
 			itemCoverage.addDatum((double) recItems.size() / (double) numItems);
+
+			for (int group = 0; group < 11; group++) {
+				precisionList.get(group).addDatum(precisionFoldList.get(group).getAverage());
+				recallList.get(group).addDatum(recallFoldList.get(group).getAverage());
+				fallOutList.get(group).addDatum(fallOutFoldList.get(group).getAverage());
+				nDCGList.get(group).addDatum(nDCGFoldList.get(group).getAverage());
+				reachAtLeastOneList.get(group).addDatum((double) numUsersWithRecommendationsList.get(group)
+						/ (double) numUsersRecommendedForList.get(group));
+				reachAllList.get(group).addDatum((double) numUsersWithAllRecommendationsList.get(group)
+						/ (double) numUsersRecommendedForList.get(group));
+			}
 
 			log.info(
 					"Precision/recall/fall-out/nDCG/reachAtLeastOne/reachAll/itemCoverage from fold {}: {} / {} / {} / {} / {} / {} / {}",
@@ -206,8 +263,19 @@ public final class KFoldRecommenderIRStatsEvaluator {
 				precision.getAverage(), recall.getAverage(), fallOut.getAverage(), nDCG.getAverage(),
 				reachAtLeastOne.getAverage(), reachAtLeastOne.getAverage(), itemCoverage.getAverage());
 
-		return new IRStatisticsImpl(precision.getAverage(), recall.getAverage(), fallOut.getAverage(),
-				nDCG.getAverage(), reachAtLeastOne.getAverage(), reachAll.getAverage(), itemCoverage.getAverage());
+		IRStatisticsRelPercentageImpl results = new IRStatisticsRelPercentageImpl(precision.getAverage(),
+				recall.getAverage(), fallOut.getAverage(), nDCG.getAverage(), reachAtLeastOne.getAverage(),
+				reachAll.getAverage(), itemCoverage.getAverage(), 11);
+
+		for (int group = 0; group < 11; group++) {
+			results.addGroupedResults(group,
+					new IRStatisticsImpl(precisionList.get(group).getAverage(), recallList.get(group).getAverage(),
+							fallOutList.get(group).getAverage(), nDCGList.get(group).getAverage(),
+							reachAtLeastOneList.get(group).getAverage(), reachAllList.get(group).getAverage(), 0));
+		}
+		
+		return results;
+
 	}
 
 	private static double computeThreshold(PreferenceArray prefs) {
@@ -225,6 +293,32 @@ public final class KFoldRecommenderIRStatsEvaluator {
 
 	private static double log2(double value) {
 		return Math.log(value) / LOG2;
+	}
+
+	private int getGroup(double per) {
+		if (per < 0.1) {
+			return 0;
+		} else if (per < 0.2) {
+			return 1;
+		} else if (per < 0.3) {
+			return 2;
+		} else if (per < 0.4) {
+			return 3;
+		} else if (per < 0.5) {
+			return 4;
+		} else if (per < 0.6) {
+			return 5;
+		} else if (per < 0.7) {
+			return 6;
+		} else if (per < 0.8) {
+			return 7;
+		} else if (per < 0.9) {
+			return 8;
+		} else if (per <= 1) {
+			return 9;
+		} else {
+			return 10;
+		}
 	}
 
 }
