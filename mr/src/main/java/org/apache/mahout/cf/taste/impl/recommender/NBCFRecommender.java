@@ -77,11 +77,15 @@ public class NBCFRecommender extends AbstractRecommender {
 	@Override
 	public List<RecommendedItem> recommend(long userID, int howMany, IDRescorer rescorer, boolean includeKnownItems)
 			throws TasteException {
-		Preconditions.checkArgument(howMany >= 1, "howMany must be at least 1");
+		Preconditions.checkArgument(howMany >= 0, "howMany must be at least 0");
 
 		log.debug("Recommending items for user ID '{}'", userID);
 
 		List<Bicluster<Long>> theNeighborhood = neighborhood.getUserNeighborhood(userID);
+		
+		if (howMany == 0) {
+			return Collections.emptyList();
+		}
 
 		if (theNeighborhood.size() == 0) {
 			return Collections.emptyList();

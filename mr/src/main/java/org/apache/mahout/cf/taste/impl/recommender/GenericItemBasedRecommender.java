@@ -119,8 +119,12 @@ public class GenericItemBasedRecommender extends AbstractRecommender implements 
   @Override
   public List<RecommendedItem> recommend(long userID, int howMany, IDRescorer rescorer, boolean includeKnownItems)
     throws TasteException {
-    Preconditions.checkArgument(howMany >= 1, "howMany must be at least 1");
+    Preconditions.checkArgument(howMany >= 0, "howMany must be at least 0");
     log.debug("Recommending items for user ID '{}'", userID);
+    
+    if (howMany == 0) {
+		return Collections.emptyList();
+	}
 
     PreferenceArray preferencesFromUser = getDataModel().getPreferencesFromUser(userID);
     if (preferencesFromUser.length() == 0) {
