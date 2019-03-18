@@ -37,19 +37,19 @@ public class Bicluster<E> implements Comparable<Bicluster<E>> {
 		this.items = new HashSet<E>();
 	}
 	
-	void addUser(E user) {
+	public void addUser(E user) {
 		this.users.add(user);
 	}
 	
-	void removeUser(E user) {
+	public void removeUser(E user) {
 		this.users.remove(user);
 	}
 	
-	void addItem(E item) {
+	public void addItem(E item) {
 		this.items.add(item);
 	}
 	
-	void removeItem(E item) {
+	public void removeItem(E item) {
 		this.items.remove(item);
 	}
 	
