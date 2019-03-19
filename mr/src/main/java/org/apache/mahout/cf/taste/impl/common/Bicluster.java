@@ -124,4 +124,16 @@ public class Bicluster<E> implements Comparable<Bicluster<E>> {
 		return (float) nbCommonCells(other) / (float) (this.getNbUsers() * this.getNbItems());
 	}
 
+	public boolean includeLower(Bicluster<E> other) {
+		return this.users.containsAll(other.users) && other.items.containsAll(this.items);
+	}
+	
+	public boolean includeGreater(Bicluster<E> other) {
+		return other.users.containsAll(this.users) && this.items.containsAll(other.items);
+	}
+	
+	public boolean equals(Bicluster<E> other) {
+		return this.users.equals(other.users) && this.items.equals(other.items);
+	}
+
 }
