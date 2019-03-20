@@ -32,8 +32,11 @@ public final class IRStatisticsImpl implements IRStatistics, Serializable {
 	private final double reachAtLeastOne;
 	private final double reachAll;
 	private final double itemCoverage;
+	private final double perPrecision;
+	private final double perRecall;
 
-	IRStatisticsImpl(double precision, double recall, double fallOut, double ndcg, double reachAtLeastOne, double reachAll, double itemCoverage) {
+	IRStatisticsImpl(double precision, double recall, double fallOut, double ndcg, double reachAtLeastOne,
+			double reachAll, double itemCoverage, double perPrecision, double perRecall) {
 		Preconditions.checkArgument(Double.isNaN(precision) || (precision >= 0.0 && precision <= 1.0),
 				"Illegal precision: " + precision + ". Must be: 0.0 <= precision <= 1.0 or NaN");
 		Preconditions.checkArgument(Double.isNaN(recall) || (recall >= 0.0 && recall <= 1.0),
@@ -48,6 +51,10 @@ public final class IRStatisticsImpl implements IRStatistics, Serializable {
 				"Illegal reachAll: " + reachAll + ". Must be: 0.0 <= reachAll <= 1.0 or NaN");
 		Preconditions.checkArgument(Double.isNaN(itemCoverage) || (itemCoverage >= 0.0 && itemCoverage <= 1.0),
 				"Illegal itemCoverage: " + itemCoverage + ". Must be: 0.0 <= itemCoverage <= 1.0 or NaN");
+		Preconditions.checkArgument(Double.isNaN(perPrecision) || (perPrecision >= 0.0 && perPrecision <= 1.0),
+				"Illegal perPrecision: " + perPrecision + ". Must be: 0.0 <= perPrecision <= 1.0 or NaN");
+		Preconditions.checkArgument(Double.isNaN(perRecall) || (perRecall >= 0.0 && perRecall <= 1.0),
+				"Illegal perRecall: " + perRecall + ". Must be: 0.0 <= perRecall <= 1.0 or NaN");
 		this.precision = precision;
 		this.recall = recall;
 		this.fallOut = fallOut;
@@ -55,10 +62,12 @@ public final class IRStatisticsImpl implements IRStatistics, Serializable {
 		this.reachAtLeastOne = reachAtLeastOne;
 		this.reachAll = reachAll;
 		this.itemCoverage = itemCoverage;
+		this.perPrecision = perPrecision;
+		this.perRecall = perRecall;
 	}
 
 	IRStatisticsImpl(double precision, double recall, double fallOut, double ndcg, double reach) {
-		this(precision, recall, fallOut, ndcg, reach, Double.NaN, Double.NaN);
+		this(precision, recall, fallOut, ndcg, reach, Double.NaN, Double.NaN, Double.NaN, Double.NaN);
 	}
 
 	@Override
@@ -97,15 +106,25 @@ public final class IRStatisticsImpl implements IRStatistics, Serializable {
 	public double getReachAtLeastOne() {
 		return reachAtLeastOne;
 	}
-	
+
 	@Override
 	public double getReachAll() {
 		return reachAll;
 	}
-	
+
 	@Override
 	public double getItemCoverage() {
 		return itemCoverage;
+	}
+
+	@Override
+	public double getPerPrecision() {
+		return perPrecision;
+	}
+
+	@Override
+	public double getPerRecall() {
+		return perRecall;
 	}
 
 	@Override

@@ -34,13 +34,17 @@ public final class IRStatisticsRelPercentageImpl implements IRStatistics, Serial
 	private final double reachAtLeastOne;
 	private final double reachAll;
 	private final double itemCoverage;
+	private final double perPrecision;
+	private final double perRecall;
 	private final Map<Integer, IRStatistics> groupedResults;
-	
-	IRStatisticsRelPercentageImpl(double precision, double recall, double fallOut, double ndcg, double reachAtLeastOne, double reachAll, double itemCoverage) {
-		this(precision, recall, fallOut, ndcg, reachAtLeastOne, reachAll, itemCoverage, 0);
+
+	IRStatisticsRelPercentageImpl(double precision, double recall, double fallOut, double ndcg, double reachAtLeastOne,
+			double reachAll, double itemCoverage) {
+		this(precision, recall, fallOut, ndcg, reachAtLeastOne, reachAll, itemCoverage, 0, Double.NaN, Double.NaN);
 	}
 
-	IRStatisticsRelPercentageImpl(double precision, double recall, double fallOut, double ndcg, double reachAtLeastOne, double reachAll, double itemCoverage, int nbGroups) {
+	IRStatisticsRelPercentageImpl(double precision, double recall, double fallOut, double ndcg, double reachAtLeastOne,
+			double reachAll, double itemCoverage, int nbGroups, double perPrecision, double perRecall) {
 		Preconditions.checkArgument(Double.isNaN(precision) || (precision >= 0.0 && precision <= 1.0),
 				"Illegal precision: " + precision + ". Must be: 0.0 <= precision <= 1.0 or NaN");
 		Preconditions.checkArgument(Double.isNaN(recall) || (recall >= 0.0 && recall <= 1.0),
@@ -55,6 +59,10 @@ public final class IRStatisticsRelPercentageImpl implements IRStatistics, Serial
 				"Illegal reachAll: " + reachAll + ". Must be: 0.0 <= reachAll <= 1.0 or NaN");
 		Preconditions.checkArgument(Double.isNaN(itemCoverage) || (itemCoverage >= 0.0 && itemCoverage <= 1.0),
 				"Illegal itemCoverage: " + itemCoverage + ". Must be: 0.0 <= itemCoverage <= 1.0 or NaN");
+		Preconditions.checkArgument(Double.isNaN(perPrecision) || (perPrecision >= 0.0 && perPrecision <= 1.0),
+				"Illegal perPrecision: " + perPrecision + ". Must be: 0.0 <= perPrecision <= 1.0 or NaN");
+		Preconditions.checkArgument(Double.isNaN(perRecall) || (perRecall >= 0.0 && perRecall <= 1.0),
+				"Illegal perRecall: " + perRecall + ". Must be: 0.0 <= perRecall <= 1.0 or NaN");
 		this.precision = precision;
 		this.recall = recall;
 		this.fallOut = fallOut;
@@ -62,17 +70,19 @@ public final class IRStatisticsRelPercentageImpl implements IRStatistics, Serial
 		this.reachAtLeastOne = reachAtLeastOne;
 		this.reachAll = reachAll;
 		this.itemCoverage = itemCoverage;
+		this.perPrecision = perPrecision;
+		this.perRecall = perRecall;
 		this.groupedResults = new HashMap<Integer, IRStatistics>(nbGroups);
 	}
 
 	IRStatisticsRelPercentageImpl(double precision, double recall, double fallOut, double ndcg, double reach) {
 		this(precision, recall, fallOut, ndcg, reach, Double.NaN, Double.NaN);
 	}
-	
+
 	public void addGroupedResults(int i, IRStatistics r) {
 		this.groupedResults.put(i, r);
 	}
-	
+
 	public IRStatistics getGroupedResults(int i) {
 		return this.groupedResults.get(i);
 	}
@@ -113,15 +123,25 @@ public final class IRStatisticsRelPercentageImpl implements IRStatistics, Serial
 	public double getReachAtLeastOne() {
 		return reachAtLeastOne;
 	}
-	
+
 	@Override
 	public double getReachAll() {
 		return reachAll;
 	}
-	
+
 	@Override
 	public double getItemCoverage() {
 		return itemCoverage;
+	}
+
+	@Override
+	public double getPerPrecision() {
+		return perPrecision;
+	}
+
+	@Override
+	public double getPerRecall() {
+		return perRecall;
 	}
 
 	@Override

@@ -65,6 +65,8 @@ public final class KFoldRecommenderIRStatsEvaluator {
 		RunningAverage reachAtLeastOne = new FullRunningAverage();
 		RunningAverage reachAll = new FullRunningAverage();
 		RunningAverage itemCoverage = new FullRunningAverage();
+		RunningAverage perPrecision = new FullRunningAverage();
+		RunningAverage perRecall = new FullRunningAverage();
 
 		List<RunningAverage> precisionList = new ArrayList<RunningAverage>(11);
 		List<RunningAverage> recallList = new ArrayList<RunningAverage>(11);
@@ -72,6 +74,8 @@ public final class KFoldRecommenderIRStatsEvaluator {
 		List<RunningAverage> nDCGList = new ArrayList<RunningAverage>(11);
 		List<RunningAverage> reachAtLeastOneList = new ArrayList<RunningAverage>(11);
 		List<RunningAverage> reachAllList = new ArrayList<RunningAverage>(11);
+		List<RunningAverage> perPrecisionList = new ArrayList<RunningAverage>(11);
+		List<RunningAverage> perRecallList = new ArrayList<RunningAverage>(11);
 		for (int group = 0; group < 11; group++) {
 			precisionList.add(new FullRunningAverage());
 			recallList.add(new FullRunningAverage());
@@ -79,6 +83,8 @@ public final class KFoldRecommenderIRStatsEvaluator {
 			nDCGList.add(new FullRunningAverage());
 			reachAtLeastOneList.add(new FullRunningAverage());
 			reachAllList.add(new FullRunningAverage());
+			perPrecisionList.add(new FullRunningAverage());
+			perRecallList.add(new FullRunningAverage());
 		}
 
 		Iterator<Fold> itF = this.folds.getFolds();
@@ -96,6 +102,8 @@ public final class KFoldRecommenderIRStatsEvaluator {
 			RunningAverage recallFold = new FullRunningAverage();
 			RunningAverage fallOutFold = new FullRunningAverage();
 			RunningAverage nDCGFold = new FullRunningAverage();
+			RunningAverage perPrecisionFold = new FullRunningAverage();
+			RunningAverage perRecallFold = new FullRunningAverage();
 			int numUsersRecommendedFor = 0;
 			int numUsersWithRecommendations = 0;
 			int numUsersWithAllRecommendations = 0;
@@ -104,6 +112,8 @@ public final class KFoldRecommenderIRStatsEvaluator {
 			List<RunningAverage> recallFoldList = new ArrayList<RunningAverage>(11);
 			List<RunningAverage> fallOutFoldList = new ArrayList<RunningAverage>(11);
 			List<RunningAverage> nDCGFoldList = new ArrayList<RunningAverage>(11);
+			List<RunningAverage> perPrecisionFoldList = new ArrayList<RunningAverage>(11);
+			List<RunningAverage> perRecallFoldList = new ArrayList<RunningAverage>(11);
 			List<Integer> numUsersRecommendedForList = new ArrayList<Integer>(11);
 			List<Integer> numUsersWithRecommendationsList = new ArrayList<Integer>(11);
 			List<Integer> numUsersWithAllRecommendationsList = new ArrayList<Integer>(11);
@@ -112,6 +122,8 @@ public final class KFoldRecommenderIRStatsEvaluator {
 				recallFoldList.add(new FullRunningAverage());
 				fallOutFoldList.add(new FullRunningAverage());
 				nDCGFoldList.add(new FullRunningAverage());
+				perPrecisionFoldList.add(new FullRunningAverage());
+				perRecallFoldList.add(new FullRunningAverage());
 				numUsersRecommendedForList.add(0);
 				numUsersWithRecommendationsList.add(0);
 				numUsersWithAllRecommendationsList.add(0);
@@ -172,16 +184,30 @@ public final class KFoldRecommenderIRStatsEvaluator {
 				int group = getGroup((double) numRelevantItems / (double) numCandidateItems);
 
 				// Precision
+				double p = 0;
 				if (numRecommendedItems > 0) {
-					precisionFold.addDatum((double) intersectionSize / (double) numRecommendedItems);
-					precisionFoldList.get(group).addDatum((double) intersectionSize / (double) numRecommendedItems);
+					p = (double) intersectionSize / (double) numRecommendedItems;
+					precisionFold.addDatum(p);
+					precisionFoldList.get(group).addDatum(p);
 				}
 
+				// Per Precision
+				double maxPrecision = Math.min(1, (double) numRelevantItems / (double) at);
+				perPrecisionFold.addDatum(p / maxPrecision);
+				perPrecisionFoldList.get(group).addDatum(p / maxPrecision);
+
 				// Recall
+				double r = 0;
 				if (numRelevantItems > 0) {
-					recallFold.addDatum((double) intersectionSize / (double) numRelevantItems);
-					recallFoldList.get(group).addDatum((double) intersectionSize / (double) numRelevantItems);
+					r = (double) intersectionSize / (double) numRelevantItems;
+					recallFold.addDatum(r);
+					recallFoldList.get(group).addDatum(r);
 				}
+
+				// Per Recall
+				double maxRecall = Math.min(1, (double) at / (double) numRelevantItems);
+				perRecallFold.addDatum(r / maxRecall);
+				perRecallFoldList.get(group).addDatum(r / maxRecall);
 
 				// Fall-out
 				if (numRelevantItems < prefs.length()) {
@@ -234,6 +260,8 @@ public final class KFoldRecommenderIRStatsEvaluator {
 			recall.addDatum(recallFold.getAverage());
 			fallOut.addDatum(fallOutFold.getAverage());
 			nDCG.addDatum(nDCGFold.getAverage());
+			perPrecision.addDatum(perPrecisionFold.getAverage());
+			perRecall.addDatum(perRecallFold.getAverage());
 			reachAtLeastOne.addDatum((double) numUsersWithRecommendations / (double) numUsersRecommendedFor);
 			reachAll.addDatum((double) numUsersWithAllRecommendations / (double) numUsersRecommendedFor);
 			itemCoverage.addDatum((double) recItems.size() / (double) numItems);
@@ -243,6 +271,8 @@ public final class KFoldRecommenderIRStatsEvaluator {
 				recallList.get(group).addDatum(recallFoldList.get(group).getAverage());
 				fallOutList.get(group).addDatum(fallOutFoldList.get(group).getAverage());
 				nDCGList.get(group).addDatum(nDCGFoldList.get(group).getAverage());
+				perPrecisionList.get(group).addDatum(perPrecisionFoldList.get(group).getAverage());
+				perRecallList.get(group).addDatum(perRecallFoldList.get(group).getAverage());
 				reachAtLeastOneList.get(group).addDatum((double) numUsersWithRecommendationsList.get(group)
 						/ (double) numUsersRecommendedForList.get(group));
 				reachAllList.get(group).addDatum((double) numUsersWithAllRecommendationsList.get(group)
@@ -265,15 +295,17 @@ public final class KFoldRecommenderIRStatsEvaluator {
 
 		IRStatisticsRelPercentageImpl results = new IRStatisticsRelPercentageImpl(precision.getAverage(),
 				recall.getAverage(), fallOut.getAverage(), nDCG.getAverage(), reachAtLeastOne.getAverage(),
-				reachAll.getAverage(), itemCoverage.getAverage(), 11);
+				reachAll.getAverage(), itemCoverage.getAverage(), 11, perPrecision.getAverage(),
+				perRecall.getAverage());
 
 		for (int group = 0; group < 11; group++) {
 			results.addGroupedResults(group,
 					new IRStatisticsImpl(precisionList.get(group).getAverage(), recallList.get(group).getAverage(),
 							fallOutList.get(group).getAverage(), nDCGList.get(group).getAverage(),
-							reachAtLeastOneList.get(group).getAverage(), reachAllList.get(group).getAverage(), 0));
+							reachAtLeastOneList.get(group).getAverage(), reachAllList.get(group).getAverage(), 0,
+							perPrecisionList.get(group).getAverage(), perRecallList.get(group).getAverage()));
 		}
-		
+
 		return results;
 
 	}

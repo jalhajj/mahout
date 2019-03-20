@@ -87,4 +87,8 @@ public interface IRStatistics {
    */
   double getItemCoverage();
   
+  double getPerPrecision();
+  
+  double getPerRecall();
+  
 }
