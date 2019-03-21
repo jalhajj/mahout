@@ -192,10 +192,10 @@ public final class KFoldRecommenderIRStatsEvaluator {
 				}
 
 				// Per Precision
-				double maxPrecision = Math.min(1, (double) numRelevantItems / (double) at);
+				double maxPrecision = Math.min(1, (double) numRelevantItems / (double) numRecommendedItems);
 				perPrecisionFold.addDatum(p / maxPrecision);
 				perPrecisionFoldList.get(group).addDatum(p / maxPrecision);
-
+			
 				// Recall
 				double r = 0;
 				if (numRelevantItems > 0) {
@@ -205,7 +205,7 @@ public final class KFoldRecommenderIRStatsEvaluator {
 				}
 
 				// Per Recall
-				double maxRecall = Math.min(1, (double) at / (double) numRelevantItems);
+				double maxRecall = Math.min(1, (double) numRecommendedItems / (double) numRelevantItems);
 				perRecallFold.addDatum(r / maxRecall);
 				perRecallFoldList.get(group).addDatum(r / maxRecall);
 
