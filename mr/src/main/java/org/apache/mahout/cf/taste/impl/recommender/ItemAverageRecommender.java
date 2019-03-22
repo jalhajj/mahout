@@ -34,6 +34,7 @@ import org.apache.mahout.cf.taste.impl.common.RefreshHelper;
 import org.apache.mahout.cf.taste.impl.common.RunningAverage;
 import org.apache.mahout.cf.taste.model.DataModel;
 import org.apache.mahout.cf.taste.model.PreferenceArray;
+import org.apache.mahout.cf.taste.recommender.CandidateItemsStrategy;
 import org.apache.mahout.cf.taste.recommender.IDRescorer;
 import org.apache.mahout.cf.taste.recommender.RecommendedItem;
 import org.slf4j.Logger;
@@ -70,6 +71,21 @@ public final class ItemAverageRecommender extends AbstractRecommender {
     refreshHelper.addDependency(dataModel);
     buildAverageDiffs();
   }
+  
+  public ItemAverageRecommender(DataModel dataModel, CandidateItemsStrategy strategy) throws TasteException {
+	    super(dataModel, strategy);
+	    this.itemAverages = new FastByIDMap<>();
+	    this.buildAveragesLock = new ReentrantReadWriteLock();
+	    this.refreshHelper = new RefreshHelper(new Callable<Object>() {
+	      @Override
+	      public Object call() throws TasteException {
+	        buildAverageDiffs();
+	        return null;
+	      }
+	    });
+	    refreshHelper.addDependency(dataModel);
+	    buildAverageDiffs();
+	  }
   
   @Override
   public List<RecommendedItem> recommend(long userID, int howMany, IDRescorer rescorer, boolean includeKnownItems)
