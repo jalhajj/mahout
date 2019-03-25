@@ -3,14 +3,18 @@ package org.apache.mahout.cf.taste.impl.recommender;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
+
 import com.google.common.base.Preconditions;
 import org.apache.mahout.cf.taste.common.Refreshable;
 import org.apache.mahout.cf.taste.common.TasteException;
 import org.apache.mahout.cf.taste.impl.common.Bicluster;
 import org.apache.mahout.cf.taste.impl.common.FastByIDMap;
 import org.apache.mahout.cf.taste.impl.common.FastIDSet;
+import org.apache.mahout.cf.taste.impl.common.LongPrimitiveIterator;
 import org.apache.mahout.cf.taste.impl.recommender.AbstractRecommender;
 import org.apache.mahout.cf.taste.impl.recommender.TopItems;
 import org.apache.mahout.cf.taste.impl.similarity.JaccardItemSimilarity;
@@ -81,7 +85,7 @@ public final class BCNRecommender extends AbstractRecommender {
 		if (sb.isEmpty()) {
 			return Float.NaN;
 		}
-		
+
 		double g = 0;
 		int cnt = 0;
 		Iterator<Long> it = sb.getItems();
@@ -96,7 +100,7 @@ public final class BCNRecommender extends AbstractRecommender {
 			g = g / (double) cnt;
 		}
 		log.debug("Global similarity of user {} and item {} is {}", userID, itemID, g);
-		
+
 		List<Bicluster<Long>> neighbors = getBiclusterNeighborhood(sb, userID);
 		double l = 0;
 		for (Bicluster<Long> bb : neighbors) {
@@ -113,9 +117,9 @@ public final class BCNRecommender extends AbstractRecommender {
 	}
 
 	private Bicluster<Long> getSmallestBicluster(long userID) throws TasteException {
-		
+
 		if (!this.smallers.containsKey(userID)) {
-		
+
 			DataModel model = getDataModel();
 			Bicluster<Long> sb = new Bicluster<Long>();
 			sb.addUser(userID);
@@ -146,28 +150,26 @@ public final class BCNRecommender extends AbstractRecommender {
 			this.smallers.put(userID, sb);
 			log.debug("Computed smallest bicluster for user {} is {}", userID, sb);
 			return sb;
-		
+
 		} else {
 			Bicluster<Long> sb = this.smallers.get(userID);
 			log.debug("Cached smallest bicluster for user {} is {}", userID, sb);
 			return sb;
 		}
 	}
-	
+
 	private List<Bicluster<Long>> getBiclusterNeighborhood(Bicluster<Long> sb, long userID) throws TasteException {
 		if (!this.neighborhoods.containsKey(userID)) {
-			List<Bicluster<Long>> lowers = new ArrayList<Bicluster<Long>>();
-			getLowers(sb, lowers);
+			List<Bicluster<Long>> lowers = getLowers(sb);
 			log.debug("Lower biclusters of {} are {}", sb, lowers);
-			List<Bicluster<Long>> uppers = new ArrayList<Bicluster<Long>>();
-			getUppers(sb, uppers);
+			List<Bicluster<Long>> uppers = getUppers(sb);
 			log.debug("Upper biclusters of {} are {}", sb, uppers);
 			List<Bicluster<Long>> siblings = new ArrayList<Bicluster<Long>>();
 			for (Bicluster<Long> b : uppers) {
-				getLowers(b, siblings);
+				siblings.addAll(getLowers(b));
 			}
 			log.debug("Sibling biclusters of {} are {}", sb, siblings);
-			
+
 			List<Bicluster<Long>> candidates = new ArrayList<Bicluster<Long>>();
 			candidates.addAll(lowers);
 			for (Bicluster<Long> b : siblings) {
@@ -176,7 +178,7 @@ public final class BCNRecommender extends AbstractRecommender {
 				}
 			}
 			log.debug("Computed candidate biclusters of {} are {}", sb, candidates);
-			
+
 			this.neighborhoods.put(userID, candidates);
 			return candidates;
 		} else {
@@ -185,125 +187,135 @@ public final class BCNRecommender extends AbstractRecommender {
 			return candidates;
 		}
 	}
-	
-	private void getLowers(Bicluster<Long> b, List<Bicluster<Long>> biclusters) throws TasteException {
-		long[] userIDs = new long[b.getNbUsers()];
-		Iterator<Long> it = b.getUsers();
-		int i = 0;
-		while (it.hasNext()) {
-			long userID = it.next();
-			userIDs[i] = userID;
-			i++;
-		}
-		getLowers(b, biclusters, userIDs, i - 1);
-	}
-	
-	private void getLowers(Bicluster<Long> b, List<Bicluster<Long>> biclusters, long[] userIDs, int i) throws TasteException {
+
+	private Set<Long> getSharedUsers(Set<Long> items) throws TasteException {
 		DataModel model = getDataModel();
-		if (!b.isEmpty()) {
-			int nbItemsAdded = 0;
-			Iterator<Long> it = b.getUsers();
-			long userID = it.next();
-			for (Preference pref : model.getPreferencesFromUser(userID)) {
-				long itemID = pref.getItemID();
-				boolean hasAll = true;
-				it = b.getUsers();
-				while (hasAll && it.hasNext()) {
-					long otherUserID = it.next();
-					Float rating = model.getPreferenceValue(otherUserID, itemID);
-					if (rating == null || rating < this.threshold) {
-						hasAll = false;
+		Set<Long> shared = new HashSet<Long>();
+		boolean first = true;
+		for (long itemID : items) {
+			if (first) {
+				PreferenceArray prefs = model.getPreferencesForItem(itemID);
+				for (Preference pref : prefs) {
+					if (pref.getValue() >= this.threshold) {
+						shared.add(pref.getUserID());
 					}
 				}
-				if (hasAll && !b.containsItem(itemID)) {
-					b.addItem(itemID);
-					nbItemsAdded++;
-				}
-			}
-			if (nbItemsAdded > 0) {
-				boolean valid = true;
-				for (Bicluster<Long> bb : biclusters) {
-					if (!valid) {
-						break;
-					}
-					if (bb.includeLower(b)) {
-						valid = false;
-					}
-				}
-				if (valid) {
-					biclusters.add(b);
-				}
+				first = false;
 			} else {
-				if (i >= 0) {
-					long otherUserID = userIDs[i];
-					getLowers(b.copy(), biclusters, userIDs, i - 1);
-					Bicluster<Long> bWithout = b.copy();
-					bWithout.removeUser(otherUserID);
-					getLowers(bWithout, biclusters, userIDs, i - 1);
-				} 
+				Set<Long> users = new HashSet<Long>(shared);
+				for (long userID : users) {
+					Float rating = model.getPreferenceValue(userID, itemID);
+					if (rating == null || rating < this.threshold) {
+						shared.remove(userID);
+					}
+				}
 			}
 		}
+		return shared;
 	}
 	
-	private void getUppers(Bicluster<Long> b, List<Bicluster<Long>> biclusters) throws TasteException {
-		long[] itemIDs = new long[b.getNbItems()];
-		Iterator<Long> it = b.getItems();
-		int i = 0;
-		while (it.hasNext()) {
-			long itemID = it.next();
-			itemIDs[i] = itemID;
-			i++;
-		}
-		getUppers(b, biclusters, itemIDs, i - 1);
-	}
-	
-	private void getUppers(Bicluster<Long> b, List<Bicluster<Long>> biclusters, long[] itemIDs, int i) throws TasteException {
+	private Set<Long> getSharedItems(Set<Long> users) throws TasteException {
 		DataModel model = getDataModel();
-		if (!b.isEmpty()) {
-			int nbUsersAdded = 0;
-			Iterator<Long> it = b.getItems();
-			long itemID = it.next();
-			for (Preference pref : model.getPreferencesForItem(itemID)) {
-				long userID = pref.getUserID();
-				boolean hasAll = true;
-				it = b.getItems();
-				while (hasAll && it.hasNext()) {
-					long otherItemID = it.next();
-					Float rating = model.getPreferenceValue(userID, otherItemID);
-					if (rating == null || rating < this.threshold) {
-						hasAll = false;
+		Set<Long> shared = new HashSet<Long>();
+		boolean first = true;
+		for (long userID : users) {
+			if (first) {
+				PreferenceArray prefs = model.getPreferencesFromUser(userID);
+				for (Preference pref : prefs) {
+					if (pref.getValue() >= this.threshold) {
+						shared.add(pref.getItemID());
 					}
 				}
-				if (hasAll && !b.containsUser(userID)) {
-					b.addUser(userID);
-					nbUsersAdded++;
-				}
-			}
-			if (nbUsersAdded > 0) {
-				boolean valid = true;
-				for (Bicluster<Long> bb : biclusters) {
-					if (!valid) {
-						break;
-					}
-					if (bb.includeGreater(b)) {
-						valid = false;
-					}
-				}
-				if (valid) {
-					biclusters.add(b);
-				}
+				first = false;
 			} else {
-				if (i >= 0) {
-					long otherItemID = itemIDs[i];
-					getUppers(b.copy(), biclusters, itemIDs, i - 1);
-					Bicluster<Long> bWithout = b.copy();
-					bWithout.removeItem(otherItemID);
-					getUppers(bWithout, biclusters, itemIDs, i - 1);
-				} 
+				Set<Long> items = new HashSet<Long>(shared);
+				for (long itemID : items) {
+					Float rating = model.getPreferenceValue(userID, itemID);
+					if (rating == null || rating < this.threshold) {
+						shared.remove(itemID);
+					}
+				}
 			}
 		}
+		return shared;
 	}
 	
+	private List<Bicluster<Long>> getLowers(Bicluster<Long> b) throws TasteException {
+		DataModel model = getDataModel();
+		Set<Long> items = b.getSetItems();
+		List<Bicluster<Long>> lowers = new ArrayList<Bicluster<Long>>();
+		LongPrimitiveIterator it = model.getItemIDs();
+		while (it.hasNext()) {
+			long itemID = it.nextLong();
+			if (!items.contains(itemID)) {
+				Set<Long> otherItems = new HashSet<Long>(items);
+				otherItems.add(itemID);
+				Set<Long> theUsers = getSharedUsers(otherItems);
+				Set<Long> theItems = getSharedItems(theUsers);
+				Bicluster<Long> theB = new Bicluster<Long>(theUsers, theItems);
+				if (!theB.isEmpty()) {
+					boolean valid = true;
+					Bicluster<Long> toRemove = null;
+					for (Bicluster<Long> bb : lowers) {
+						if (!valid) {
+							break;
+						}
+						if (bb.includeLower(theB)) {
+							valid = false;
+						} else if (bb.includeGreater(theB)) {
+							toRemove = bb;
+						}
+					}
+					if (valid ) {
+						lowers.add(theB);
+						if (toRemove != null) {
+							lowers.remove(toRemove);
+						}
+					}
+				}
+			}
+		}
+		return lowers;
+	}
+	
+	private List<Bicluster<Long>> getUppers(Bicluster<Long> b) throws TasteException {
+		DataModel model = getDataModel();
+		Set<Long> users = b.getSetUsers();
+		List<Bicluster<Long>> uppers = new ArrayList<Bicluster<Long>>();
+		LongPrimitiveIterator it = model.getUserIDs();
+		while (it.hasNext()) {
+			long userID = it.nextLong();
+			if (!users.contains(userID)) {
+				Set<Long> otherUsers = new HashSet<Long>(users);
+				otherUsers.add(userID);
+				Set<Long> theItems = getSharedItems(otherUsers);
+				Set<Long> theUsers = getSharedUsers(theItems);
+				Bicluster<Long> theB = new Bicluster<Long>(theUsers, theItems);
+				if (!theB.isEmpty()) {
+					boolean valid = true;
+					Bicluster<Long> toRemove = null;
+					for (Bicluster<Long> bb : uppers) {
+						if (!valid) {
+							break;
+						}
+						if (bb.includeGreater(theB)) {
+							valid = false;
+						} else if (bb.includeLower(theB)) {
+							toRemove = bb;
+						}
+					}
+					if (valid) {
+						uppers.add(theB);
+						if (toRemove != null) {
+							uppers.remove(toRemove);
+						}
+					}
+				}
+			}
+		}
+		return uppers;
+	}
+
 	private double biSim(Bicluster<Long> b1, Bicluster<Long> b2) throws TasteException {
 		DataModel model = getDataModel();
 		Bicluster<Long> b = b1.copy();

@@ -9,7 +9,7 @@ public class Bicluster<E> implements Comparable<Bicluster<E>> {
 	private Set<E> users;
 	private Set<E> items;
 	
-	private Bicluster(Set<E> u, Set<E> j) {
+	public Bicluster(Set<E> u, Set<E> j) {
 		this.users = u;
 		this.items = j;
 	}
@@ -75,6 +75,14 @@ public class Bicluster<E> implements Comparable<Bicluster<E>> {
 	
 	public Iterator<E> getItems() {
 		return this.items.iterator();
+	}
+	
+	public Set<E> getSetUsers() {
+		return this.users;
+	}
+	
+	public Set<E> getSetItems() {
+		return this.items;
 	}
 	
 	public boolean isEmpty() {

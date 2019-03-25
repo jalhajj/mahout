@@ -136,7 +136,12 @@ public final class KFoldRecommenderIRStatsEvaluator {
 
 				long userID = it.nextLong();
 
-				FastIDSet candidateItemsIDs = recommender.getCandidateItems(userID);
+				FastIDSet candidateItemsIDs;
+				try {
+					candidateItemsIDs = recommender.getCandidateItems(userID);
+				} catch (NoSuchUserException nsue) {
+					continue;
+				}
 				int numCandidateItems = candidateItemsIDs.size();
 
 				PreferenceArray prefs = testPrefs.get(userID);
