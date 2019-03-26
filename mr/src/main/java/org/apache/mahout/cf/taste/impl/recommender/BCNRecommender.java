@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 
 import com.google.common.base.Preconditions;
 import org.apache.mahout.cf.taste.common.Refreshable;
@@ -27,6 +28,7 @@ import org.apache.mahout.cf.taste.recommender.RecommendedItem;
 import org.apache.mahout.cf.taste.similarity.ItemSimilarity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.thegalactic.context.Context;
 
 public final class BCNRecommender extends AbstractRecommender {
 
@@ -34,6 +36,7 @@ public final class BCNRecommender extends AbstractRecommender {
 	private final float threshold;
 	private final FastByIDMap<Bicluster<Long>> smallers;
 	private final FastByIDMap<List<Bicluster<Long>>> neighborhoods;
+	private final Context ctx;
 
 	private static final Logger log = LoggerFactory.getLogger(BCNRecommender.class);
 
@@ -43,6 +46,8 @@ public final class BCNRecommender extends AbstractRecommender {
 		this.threshold = threshold;
 		this.smallers = new FastByIDMap<Bicluster<Long>>(dataModel.getNumUsers());
 		this.neighborhoods = new FastByIDMap<List<Bicluster<Long>>>(dataModel.getNumUsers());
+		this.ctx = new Context();
+		initLattice();
 	}
 
 	public BCNRecommender(DataModel dataModel, float threshold) throws TasteException {
@@ -51,6 +56,36 @@ public final class BCNRecommender extends AbstractRecommender {
 		this.threshold = threshold;
 		this.smallers = new FastByIDMap<Bicluster<Long>>(dataModel.getNumUsers());
 		this.neighborhoods = new FastByIDMap<List<Bicluster<Long>>>(dataModel.getNumUsers());
+		this.ctx = new Context();
+		initLattice();
+	}
+
+	private void initLattice() throws TasteException {
+		
+		log.debug("Add attributes to lattice");
+		DataModel model = getDataModel();
+		LongPrimitiveIterator it;
+		it = model.getItemIDs();
+		while (it.hasNext()) {
+			long itemID = it.nextLong();
+			this.ctx.addToAttributes(itemID);
+		}
+		log.debug("Add obsevations and intent/extend to lattice");
+		it = model.getUserIDs();
+		while (it.hasNext()) {
+			long userID = it.nextLong();
+			this.ctx.addToObservations(userID);
+			for (Preference pref : model.getPreferencesFromUser(userID)) {
+				if (pref.getValue() >= this.threshold) {
+					long itemID = pref.getItemID();
+					boolean b = this.ctx.addExtentIntent(userID, itemID);
+					log.debug("Added {},{}, worked? {}", userID, itemID, b);
+				}
+			}
+		}
+		
+		log.debug("Final context is {}", this.ctx.toString());
+		
 	}
 
 	@Override
@@ -116,41 +151,14 @@ public final class BCNRecommender extends AbstractRecommender {
 		return (float) (g * l);
 	}
 
+	@SuppressWarnings("rawtypes")
 	private Bicluster<Long> getSmallestBicluster(long userID) throws TasteException {
-
 		if (!this.smallers.containsKey(userID)) {
-
-			DataModel model = getDataModel();
-			Bicluster<Long> sb = new Bicluster<Long>();
-			sb.addUser(userID);
-			long itemID = 0;
-			for (Preference pref : model.getPreferencesFromUser(userID)) {
-				if (pref.getValue() >= this.threshold) {
-					sb.addItem(pref.getItemID());
-					itemID = pref.getItemID();
-				}
-			}
-			if (!sb.isEmpty()) {
-				for (Preference pref : model.getPreferencesForItem(itemID)) {
-					long otherUserID = pref.getUserID();
-					boolean hasAll = true;
-					Iterator<Long> it = sb.getItems();
-					while (hasAll && it.hasNext()) {
-						long otherItemID = it.next();
-						Float rating = model.getPreferenceValue(otherUserID, otherItemID);
-						if (rating == null || rating < this.threshold) {
-							hasAll = false;
-						}
-					}
-					if (hasAll) {
-						sb.addUser(otherUserID);
-					}
-				}
-			}
-			this.smallers.put(userID, sb);
+			TreeSet<Comparable> itemSet = this.ctx.getIntent(userID);
+			TreeSet<Comparable> userSet = this.ctx.getExtent(itemSet);
+			Bicluster<Long> sb = getBiclusterFromComparable(userSet, itemSet);
 			log.debug("Computed smallest bicluster for user {} is {}", userID, sb);
 			return sb;
-
 		} else {
 			Bicluster<Long> sb = this.smallers.get(userID);
 			log.debug("Cached smallest bicluster for user {} is {}", userID, sb);
@@ -188,130 +196,111 @@ public final class BCNRecommender extends AbstractRecommender {
 		}
 	}
 
-	private Set<Long> getSharedUsers(Set<Long> items) throws TasteException {
-		DataModel model = getDataModel();
-		Set<Long> shared = new HashSet<Long>();
-		boolean first = true;
-		for (long itemID : items) {
-			if (first) {
-				PreferenceArray prefs = model.getPreferencesForItem(itemID);
-				for (Preference pref : prefs) {
-					if (pref.getValue() >= this.threshold) {
-						shared.add(pref.getUserID());
-					}
-				}
-				first = false;
-			} else {
-				Set<Long> users = new HashSet<Long>(shared);
-				for (long userID : users) {
-					Float rating = model.getPreferenceValue(userID, itemID);
-					if (rating == null || rating < this.threshold) {
-						shared.remove(userID);
-					}
-				}
-			}
+	@SuppressWarnings({ "rawtypes" })
+	private Bicluster<Long> getBiclusterFromComparable(TreeSet<Comparable> userSet, TreeSet<Comparable> itemSet) {
+		Set<Long> users = new HashSet<Long>();
+		for (Comparable comp : userSet) {
+			users.add((Long) comp);
 		}
-		return shared;
-	}
-	
-	private Set<Long> getSharedItems(Set<Long> users) throws TasteException {
-		DataModel model = getDataModel();
-		Set<Long> shared = new HashSet<Long>();
-		boolean first = true;
-		for (long userID : users) {
-			if (first) {
-				PreferenceArray prefs = model.getPreferencesFromUser(userID);
-				for (Preference pref : prefs) {
-					if (pref.getValue() >= this.threshold) {
-						shared.add(pref.getItemID());
-					}
-				}
-				first = false;
-			} else {
-				Set<Long> items = new HashSet<Long>(shared);
-				for (long itemID : items) {
-					Float rating = model.getPreferenceValue(userID, itemID);
-					if (rating == null || rating < this.threshold) {
-						shared.remove(itemID);
-					}
-				}
-			}
+		Set<Long> items = new HashSet<Long>();
+		for (Comparable comp : itemSet) {
+			items.add((Long) comp);
 		}
-		return shared;
+		return new Bicluster<Long>(users, items);
 	}
-	
+
+	@SuppressWarnings("rawtypes")
 	private List<Bicluster<Long>> getLowers(Bicluster<Long> b) throws TasteException {
-		DataModel model = getDataModel();
-		Set<Long> items = b.getSetItems();
+		
+		TreeSet<Comparable> itemSet = new TreeSet<Comparable>();
+		for (long itemID : b.getSetItems()) {
+			itemSet.add(itemID);
+		}
+		
 		List<Bicluster<Long>> lowers = new ArrayList<Bicluster<Long>>();
+		Set<TreeSet<Comparable>> validUserSets = new HashSet<TreeSet<Comparable>>();
+		DataModel model = getDataModel();
 		LongPrimitiveIterator it = model.getItemIDs();
 		while (it.hasNext()) {
 			long itemID = it.nextLong();
-			if (!items.contains(itemID)) {
-				Set<Long> otherItems = new HashSet<Long>(items);
-				otherItems.add(itemID);
-				Set<Long> theUsers = getSharedUsers(otherItems);
-				Set<Long> theItems = getSharedItems(theUsers);
-				Bicluster<Long> theB = new Bicluster<Long>(theUsers, theItems);
-				if (!theB.isEmpty()) {
+			if (!b.containsItem(itemID)) {
+				TreeSet<Comparable> items = new TreeSet<Comparable>(itemSet);
+				items.add(itemID);
+				TreeSet<Comparable> theUsers = this.ctx.getExtent(items);
+				if (!theUsers.isEmpty()) {
 					boolean valid = true;
-					Bicluster<Long> toRemove = null;
-					for (Bicluster<Long> bb : lowers) {
+					List<TreeSet<Comparable>> toRemove = new ArrayList<TreeSet<Comparable>>();
+					for (TreeSet<Comparable> otherSet : validUserSets) {
 						if (!valid) {
 							break;
 						}
-						if (bb.includeLower(theB)) {
+						if (otherSet.containsAll(theUsers)) {
 							valid = false;
-						} else if (bb.includeGreater(theB)) {
-							toRemove = bb;
+						} else if (theUsers.containsAll(otherSet)) {
+							toRemove.add(otherSet);
 						}
 					}
-					if (valid ) {
-						lowers.add(theB);
-						if (toRemove != null) {
-							lowers.remove(toRemove);
+					if (valid) {
+						validUserSets.add(theUsers);
+						for (TreeSet<Comparable> otherSet : toRemove) {
+							validUserSets.remove(otherSet);
 						}
 					}
 				}
 			}
 		}
+		for (TreeSet<Comparable> theUsers : validUserSets) {
+			TreeSet<Comparable> theItems = this.ctx.getIntent(theUsers);
+			Bicluster<Long> theB = getBiclusterFromComparable(theUsers, theItems);
+			lowers.add(theB);
+		}
 		return lowers;
 	}
-	
+
+	@SuppressWarnings("rawtypes")
 	private List<Bicluster<Long>> getUppers(Bicluster<Long> b) throws TasteException {
-		DataModel model = getDataModel();
-		Set<Long> users = b.getSetUsers();
+		
+		TreeSet<Comparable> userSet = new TreeSet<Comparable>();
+		for (long userID : b.getSetUsers()) {
+			userSet.add(userID);
+		}
+		
 		List<Bicluster<Long>> uppers = new ArrayList<Bicluster<Long>>();
+		Set<TreeSet<Comparable>> validItemSets = new HashSet<TreeSet<Comparable>>();
+		DataModel model = getDataModel();
 		LongPrimitiveIterator it = model.getUserIDs();
 		while (it.hasNext()) {
 			long userID = it.nextLong();
-			if (!users.contains(userID)) {
-				Set<Long> otherUsers = new HashSet<Long>(users);
-				otherUsers.add(userID);
-				Set<Long> theItems = getSharedItems(otherUsers);
-				Set<Long> theUsers = getSharedUsers(theItems);
-				Bicluster<Long> theB = new Bicluster<Long>(theUsers, theItems);
-				if (!theB.isEmpty()) {
+			if (!b.containsUser(userID)) {
+				TreeSet<Comparable> users = new TreeSet<Comparable>(userSet);
+				users.add(userID);
+				TreeSet<Comparable> theItems = this.ctx.getIntent(users);
+				if (!theItems.isEmpty()) {
 					boolean valid = true;
-					Bicluster<Long> toRemove = null;
-					for (Bicluster<Long> bb : uppers) {
+					List<TreeSet<Comparable>> toRemove = new ArrayList<TreeSet<Comparable>>();
+					for (TreeSet<Comparable> otherSet : validItemSets) {
 						if (!valid) {
 							break;
 						}
-						if (bb.includeGreater(theB)) {
+						if (theItems.containsAll(otherSet)) {
 							valid = false;
-						} else if (bb.includeLower(theB)) {
-							toRemove = bb;
+						} else if (otherSet.containsAll(theItems)) {
+							toRemove.add(otherSet);
 						}
 					}
 					if (valid) {
-						uppers.add(theB);
-						if (toRemove != null) {
-							uppers.remove(toRemove);
+						validItemSets.add(theItems);
+						for (TreeSet<Comparable> otherSet : toRemove) {
+							validItemSets.remove(otherSet);
 						}
 					}
 				}
 			}
+		}
+		for (TreeSet<Comparable> theItems : validItemSets) {
+			TreeSet<Comparable> theUsers = this.ctx.getExtent(theItems);
+			Bicluster<Long> theB = getBiclusterFromComparable(theUsers, theItems);
+			uppers.add(theB);
 		}
 		return uppers;
 	}
