@@ -61,7 +61,6 @@ public final class BCNRecommender extends AbstractRecommender {
 	}
 
 	private void initLattice() throws TasteException {
-		
 		log.debug("Add attributes to lattice");
 		DataModel model = getDataModel();
 		LongPrimitiveIterator it;
@@ -83,9 +82,9 @@ public final class BCNRecommender extends AbstractRecommender {
 				}
 			}
 		}
-		
 		log.debug("Final context is {}", this.ctx.toString());
 		
+		this.ctx.setBitSets();
 	}
 
 	@Override
@@ -110,6 +109,8 @@ public final class BCNRecommender extends AbstractRecommender {
 
 	@Override
 	public float estimatePreference(long userID, long itemID) throws TasteException {
+		long t1, t2;
+		
 		DataModel model = getDataModel();
 		Float actualPref = model.getPreferenceValue(userID, itemID);
 		if (actualPref != null) {
@@ -134,9 +135,14 @@ public final class BCNRecommender extends AbstractRecommender {
 		if (cnt > 0) {
 			g = g / (double) cnt;
 		}
+		
 		log.debug("Global similarity of user {} and item {} is {}", userID, itemID, g);
 
+		t1 = System.currentTimeMillis();
 		List<Bicluster<Long>> neighbors = getBiclusterNeighborhood(sb, userID);
+		t2 = System.currentTimeMillis();
+		log.debug("candidate biclusters: {} ms", t2 - t1);
+		
 		double l = 0;
 		for (Bicluster<Long> bb : neighbors) {
 			if (bb.containsItem(itemID)) {
@@ -146,6 +152,7 @@ public final class BCNRecommender extends AbstractRecommender {
 		if (l == 0) {
 			return Float.NaN;
 		}
+
 		log.debug("Local similarity of user {} and item {} is {}", userID, itemID, l);
 
 		return (float) (g * l);
@@ -158,6 +165,7 @@ public final class BCNRecommender extends AbstractRecommender {
 			TreeSet<Comparable> userSet = this.ctx.getExtent(itemSet);
 			Bicluster<Long> sb = getBiclusterFromComparable(userSet, itemSet);
 			log.debug("Computed smallest bicluster for user {} is {}", userID, sb);
+			this.smallers.put(userID, sb);
 			return sb;
 		} else {
 			Bicluster<Long> sb = this.smallers.get(userID);
@@ -166,24 +174,21 @@ public final class BCNRecommender extends AbstractRecommender {
 		}
 	}
 
+	@SuppressWarnings("rawtypes")
 	private List<Bicluster<Long>> getBiclusterNeighborhood(Bicluster<Long> sb, long userID) throws TasteException {
 		if (!this.neighborhoods.containsKey(userID)) {
-			List<Bicluster<Long>> lowers = getLowers(sb);
-			log.debug("Lower biclusters of {} are {}", sb, lowers);
+			
+			TreeSet<Comparable> userSet = new TreeSet<Comparable>();
+			for (long otherUserID : sb.getSetUsers()) {
+				userSet.add(otherUserID);
+			}
+			
+			List<Bicluster<Long>> candidates = getLowers(sb, null);
+			log.debug("Lower biclusters of {} are {}", sb, candidates);
 			List<Bicluster<Long>> uppers = getUppers(sb);
 			log.debug("Upper biclusters of {} are {}", sb, uppers);
-			List<Bicluster<Long>> siblings = new ArrayList<Bicluster<Long>>();
 			for (Bicluster<Long> b : uppers) {
-				siblings.addAll(getLowers(b));
-			}
-			log.debug("Sibling biclusters of {} are {}", sb, siblings);
-
-			List<Bicluster<Long>> candidates = new ArrayList<Bicluster<Long>>();
-			candidates.addAll(lowers);
-			for (Bicluster<Long> b : siblings) {
-				if (!b.equals(sb)) {
-					candidates.add(b);
-				}
+				candidates.addAll(getLowers(b, userSet));
 			}
 			log.debug("Computed candidate biclusters of {} are {}", sb, candidates);
 
@@ -210,7 +215,7 @@ public final class BCNRecommender extends AbstractRecommender {
 	}
 
 	@SuppressWarnings("rawtypes")
-	private List<Bicluster<Long>> getLowers(Bicluster<Long> b) throws TasteException {
+	private List<Bicluster<Long>> getLowers(Bicluster<Long> b, TreeSet<Comparable> cur) throws TasteException {
 		
 		TreeSet<Comparable> itemSet = new TreeSet<Comparable>();
 		for (long itemID : b.getSetItems()) {
@@ -224,17 +229,31 @@ public final class BCNRecommender extends AbstractRecommender {
 		while (it.hasNext()) {
 			long itemID = it.nextLong();
 			if (!b.containsItem(itemID)) {
+				int nbZeros = 0;
+				Iterator<Long> itU = b.getUsers();
+				while (itU.hasNext()) {
+					long userID = itU.next();
+					Float rating = model.getPreferenceValue(userID, itemID);
+					if (rating == null || rating < this.threshold) {
+						nbZeros++;
+					} else {
+						break;
+					}
+				}
+				if (nbZeros == b.getNbUsers()) {
+					continue;
+				}
 				TreeSet<Comparable> items = new TreeSet<Comparable>(itemSet);
 				items.add(itemID);
 				TreeSet<Comparable> theUsers = this.ctx.getExtent(items);
-				if (!theUsers.isEmpty()) {
+				if (!theUsers.isEmpty() && (cur == null || !theUsers.equals(cur))) {
 					boolean valid = true;
 					List<TreeSet<Comparable>> toRemove = new ArrayList<TreeSet<Comparable>>();
 					for (TreeSet<Comparable> otherSet : validUserSets) {
 						if (!valid) {
 							break;
 						}
-						if (otherSet.containsAll(theUsers)) {
+						if (otherSet.containsAll(theUsers) || (cur != null && cur.containsAll(theUsers))) {
 							valid = false;
 						} else if (theUsers.containsAll(otherSet)) {
 							toRemove.add(otherSet);
@@ -272,6 +291,20 @@ public final class BCNRecommender extends AbstractRecommender {
 		while (it.hasNext()) {
 			long userID = it.nextLong();
 			if (!b.containsUser(userID)) {
+				int nbZeros = 0;
+				Iterator<Long> itI = b.getItems();
+				while (itI.hasNext()) {
+					long itemID = itI.next();
+					Float rating = model.getPreferenceValue(userID, itemID);
+					if (rating == null || rating < this.threshold) {
+						nbZeros++;
+					} else {
+						break;
+					}
+				}
+				if (nbZeros == b.getNbItems()) {
+					continue;
+				}
 				TreeSet<Comparable> users = new TreeSet<Comparable>(userSet);
 				users.add(userID);
 				TreeSet<Comparable> theItems = this.ctx.getIntent(users);
@@ -282,9 +315,9 @@ public final class BCNRecommender extends AbstractRecommender {
 						if (!valid) {
 							break;
 						}
-						if (theItems.containsAll(otherSet)) {
+						if (otherSet.containsAll(theItems)) {
 							valid = false;
-						} else if (otherSet.containsAll(theItems)) {
+						} else if (theItems.containsAll(otherSet)) {
 							toRemove.add(otherSet);
 						}
 					}
