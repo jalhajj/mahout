@@ -11,10 +11,8 @@ import org.apache.mahout.cf.taste.eval.RecommenderBuilder;
 import org.apache.mahout.cf.taste.impl.common.FastByIDMap;
 import org.apache.mahout.cf.taste.impl.common.FastIDSet;
 import org.apache.mahout.cf.taste.impl.common.FullRunningAverage;
-import org.apache.mahout.cf.taste.impl.common.FullRunningAverageAndStdDev;
 import org.apache.mahout.cf.taste.impl.common.LongPrimitiveIterator;
 import org.apache.mahout.cf.taste.impl.common.RunningAverage;
-import org.apache.mahout.cf.taste.impl.common.RunningAverageAndStdDev;
 import org.apache.mahout.cf.taste.model.DataModel;
 import org.apache.mahout.cf.taste.model.PreferenceArray;
 import org.apache.mahout.cf.taste.recommender.RecommendedItem;
@@ -150,7 +148,7 @@ public final class KFoldRecommenderIRStatsEvaluator {
 					continue; // Oops we excluded all prefs for the user -- just move on
 				}
 				// List some most-preferred items that would count as (most) "relevant" results
-				double theRelevanceThreshold = Double.isNaN(relevanceThreshold) ? computeThreshold(prefs)
+				double theRelevanceThreshold = Double.isNaN(relevanceThreshold) ? computeThreshold(trainingModel.getPreferencesFromUser(userID))
 						: relevanceThreshold;
 				FastIDSet relevantItemIDs = new FastIDSet(prefs.length());
 				for (int i = 0; i < prefs.length(); i++) {
@@ -324,12 +322,12 @@ public final class KFoldRecommenderIRStatsEvaluator {
 			// Not enough data points -- return a threshold that allows everything
 			return Double.NEGATIVE_INFINITY;
 		}
-		RunningAverageAndStdDev stdDev = new FullRunningAverageAndStdDev();
+		RunningAverage avg = new FullRunningAverage();
 		int size = prefs.length();
 		for (int i = 0; i < size; i++) {
-			stdDev.addDatum(prefs.getValue(i));
+			avg.addDatum(prefs.getValue(i));
 		}
-		return stdDev.getAverage() + stdDev.getStandardDeviation();
+		return avg.getAverage();
 	}
 
 	private static double log2(double value) {

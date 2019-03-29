@@ -37,26 +37,31 @@ public final class BCNRecommender extends AbstractRecommender {
 	private final FastByIDMap<Bicluster<Long>> smallers;
 	private final FastByIDMap<List<Bicluster<Long>>> neighborhoods;
 	private final Context ctx;
+	private final int level;
 
 	private static final Logger log = LoggerFactory.getLogger(BCNRecommender.class);
 
-	public BCNRecommender(DataModel dataModel, float threshold, CandidateItemsStrategy strategy) throws TasteException {
+	public BCNRecommender(DataModel dataModel, float threshold, int level, CandidateItemsStrategy strategy) throws TasteException {
 		super(dataModel, strategy);
+		Preconditions.checkArgument(level > 0, "level must be at least 1");
 		this.sim = new JaccardItemSimilarity(dataModel, threshold);
 		this.threshold = threshold;
 		this.smallers = new FastByIDMap<Bicluster<Long>>(dataModel.getNumUsers());
 		this.neighborhoods = new FastByIDMap<List<Bicluster<Long>>>(dataModel.getNumUsers());
 		this.ctx = new Context();
+		this.level = level;
 		initLattice();
 	}
 
-	public BCNRecommender(DataModel dataModel, float threshold) throws TasteException {
+	public BCNRecommender(DataModel dataModel, float threshold, int level) throws TasteException {
 		super(dataModel);
+		Preconditions.checkArgument(level > 0, "level must be at least 1");
 		this.sim = new JaccardItemSimilarity(dataModel, threshold);
 		this.threshold = threshold;
 		this.smallers = new FastByIDMap<Bicluster<Long>>(dataModel.getNumUsers());
 		this.neighborhoods = new FastByIDMap<List<Bicluster<Long>>>(dataModel.getNumUsers());
 		this.ctx = new Context();
+		this.level = level;
 		initLattice();
 	}
 
@@ -191,6 +196,23 @@ public final class BCNRecommender extends AbstractRecommender {
 				candidates.addAll(getLowers(b, userSet));
 			}
 			log.debug("Computed candidate biclusters of {} are {}", sb, candidates);
+			
+			int r = this.level;
+			List<Bicluster<Long>> newCandidates = new ArrayList<Bicluster<Long>>(candidates);
+			while (r > 1) {
+				List<Bicluster<Long>> newCandidates2 = new ArrayList<Bicluster<Long>>();
+				for (Bicluster<Long> otherB : newCandidates) {
+					List<Bicluster<Long>> otherLowers = getLowers(otherB, null);
+					List<Bicluster<Long>> otherUppers = getUppers(otherB);
+					for (Bicluster<Long> b : otherUppers) {
+						otherLowers.addAll(getLowers(b, userSet));
+					}	
+					newCandidates2.addAll(otherLowers);
+				}
+				candidates.addAll(newCandidates2);
+				newCandidates = newCandidates2;
+				r--;
+			}
 
 			this.neighborhoods.put(userID, candidates);
 			return candidates;
