@@ -325,6 +325,7 @@ public class FileDataModel extends AbstractDataModel {
     for (File updateFile : parentDir.listFiles(onlyFiles)) {
       String updateFileName = updateFile.getName();
       if (updateFileName.startsWith(startName)
+          && !updateFileName.startsWith(startName + '_')
           && !updateFileName.equals(dataFileName)
           && updateFile.lastModified() >= minimumLastModified) {
         modTimeToUpdateFile.put(updateFile.lastModified(), updateFile);

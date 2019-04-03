@@ -13,19 +13,19 @@ import com.google.common.base.Preconditions;
 
 public class XMotif extends AbstractBiclusteringAlgorithm {
 
-	private final double alpha;
+	private final int ns;
 	private final int nd;
 	private final int sd;
 	private final List<Interval> intervals;
 	private final Random rand;
 
-	public XMotif(DataModel model, double alpha, int nd, int sd, List<Interval> intervals) {
+	public XMotif(DataModel model, int ns, int nd, int sd, List<Interval> intervals) {
 		super(model);
-		Preconditions.checkArgument(alpha > 0 && alpha < 1, "alpha must be such that 0 < alpha < 1: " + alpha);
+		Preconditions.checkArgument(ns > 0, "ns must be > 0: " + ns);
 		Preconditions.checkArgument(nd > 0, "nd must be > 0: " + nd);
 		Preconditions.checkArgument(sd > 0, "sd must be > 0: " + sd);
 		Preconditions.checkArgument(intervals != null, "intervals is null");
-		this.alpha = alpha;
+		this.ns = ns;
 		this.nd = nd;
 		this.sd = sd;
 		this.intervals = intervals;
@@ -37,7 +37,6 @@ public class XMotif extends AbstractBiclusteringAlgorithm {
 
 		// Prepare
 		int n = this.dataModel.getNumUsers();
-		int ns = (int) (1 / this.alpha);
 
 		List<Long> users = new ArrayList<Long>(n);
 		LongPrimitiveIterator it = this.dataModel.getUserIDs();
@@ -47,7 +46,7 @@ public class XMotif extends AbstractBiclusteringAlgorithm {
 		}
 
 		// Iterate
-		for (int i = 0; i < ns; i++) {
+		for (int i = 0; i < this.ns; i++) {
 			long userC = users.get(this.rand.nextInt(n));
 			for (int j = 0; j < this.nd; j++) {
 
@@ -116,10 +115,8 @@ public class XMotif extends AbstractBiclusteringAlgorithm {
 					}
 				}
 
-				// Check size
-				if (b.getNbUsers() >= (int) (this.alpha * n)) {
-					this.bicl.add(b);
-				}
+				this.bicl.add(b);
+
 			}
 		}
 	}
