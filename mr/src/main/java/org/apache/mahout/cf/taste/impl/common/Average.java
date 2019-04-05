@@ -29,6 +29,9 @@ public class Average {
 
 	public float compute() {
 		if (!this.valValid) {
+			if (this.cnt == 0) {
+				return Float.NaN;
+			}
 			this.val = this.sum / (float) this.cnt;
 			this.valValid = true;
 		}

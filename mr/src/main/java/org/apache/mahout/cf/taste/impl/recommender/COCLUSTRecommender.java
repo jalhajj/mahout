@@ -41,6 +41,9 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 	private FastByIDMap<Index> Rho;
 	private FastByIDMap<Index> Gamma;
 	private final RefreshHelper refreshHelper;
+	
+	private FastByIDMap<ArrayList<Average>> Atmp2;
+	private FastByIDMap<ArrayList<Average>> Atmp3;
 
 	private static final Logger log = LoggerFactory.getLogger(COCLUSTRecommender.class);
 
@@ -97,26 +100,12 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 		DataModel dataModel = getDataModel();
 		int n = dataModel.getNumUsers();
 		int m = dataModel.getNumItems();
-
-		this.ACOC = new ArrayList<ArrayList<Average>>(this.k);
-		this.ARC = new ArrayList<Average>(this.k);
-		this.ACC = new ArrayList<Average>(this.l);
-		for (int g = 0; g < this.k; g++) {
-			this.ARC.add(new Average());
-			ArrayList<Average> list = new ArrayList<Average>(this.l);
-			for (int h = 0; h < this.l; h++) {
-				list.add(new Average());
-				if (g == 0) {
-					this.ACC.add(new Average());
-				}
-			}
-			this.ACOC.add(list);
-		}
-
-		this.AR = new FastByIDMap<Average>(n);
-		this.AC = new FastByIDMap<Average>(m);
+		
 		this.Rho = new FastByIDMap<Index>(n);
 		this.Gamma = new FastByIDMap<Index>(m);
+		
+		this.AR = new FastByIDMap<Average>(n);
+		this.AC = new FastByIDMap<Average>(m);
 
 		log.info("Done with initialization, about to start training");
 		train();
@@ -182,6 +171,24 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 		do {
 			log.info("Convergence loop: iteration #{}, previous rounds had {} changings", iterNb, nbChanged);
 			nbChanged = 0;
+			
+			/* Prepare data structures */
+			this.ACOC = new ArrayList<ArrayList<Average>>(this.k);
+			this.ARC = new ArrayList<Average>(this.k);
+			this.ACC = new ArrayList<Average>(this.l);
+			for (int g = 0; g < this.k; g++) {
+				this.ARC.add(new Average());
+				ArrayList<Average> list = new ArrayList<Average>(this.l);
+				for (int h = 0; h < this.l; h++) {
+					list.add(new Average());
+					if (g == 0) {
+						this.ACC.add(new Average());
+					}
+				}
+				this.ACOC.add(list);
+			}
+			this.Atmp2 = new FastByIDMap<ArrayList<Average>>(this.k);
+			this.Atmp3 = new FastByIDMap<ArrayList<Average>>(this.k);
 
 			/* Compute averages */
 			log.info("Compute biclusters averages");
@@ -212,6 +219,26 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 					} else {
 						avgCOC.add(rating);
 					}
+					
+					float x = rating - this.AR.get(userID).compute() - this.AC.get(itemID).compute();
+					
+					if (!this.Atmp2.containsKey(userID)) {
+						ArrayList<Average> list = new ArrayList<Average>(this.l);
+						for (int hh = 0; hh < this.l; hh++) {
+							list.add(new Average());
+						}
+						this.Atmp2.put(userID, list);
+					}
+					this.Atmp2.get(userID).get(h).add(x);
+					
+					if (!this.Atmp3.containsKey(itemID)) {
+						ArrayList<Average> list = new ArrayList<Average>(this.k);
+						for (int gg = 0; gg < this.k; gg++) {
+							list.add(new Average());
+						}
+						this.Atmp3.put(itemID, list);
+					}
+					this.Atmp3.get(itemID).get(g).add(x);
 				}
 			}
 
@@ -225,16 +252,14 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 				float min = Float.MAX_VALUE;
 				for (int g = 0; g < this.k; g++) {
 					float candidate = 0;
-					PreferenceArray prefs = dataModel.getPreferencesFromUser(userID);
-					for (Preference preference : prefs) {
-						long itemID = preference.getItemID();
-						float rating = preference.getValue();
-						int h = this.Gamma.get(itemID).get();
-						float x = rating - this.ACOC.get(g).get(h).compute() - this.AR.get(userID).compute()
-								+ this.ARC.get(g).compute() - this.AC.get(itemID).compute() + this.ACC.get(h).compute();
-						candidate += x * x;
+					for (int h = 0; h < this.l; h++) {
+						Float x = this.Atmp2.get(userID).get(h).compute();
+						if (!Float.isNaN(x)) {
+							candidate += x - this.ACOC.get(g).get(h).compute()
+								+ this.ARC.get(g).compute() + this.ACC.get(h).compute();
+						}
 					}
-					if (prefs.length() != 0 && candidate <= min) {
+					if (candidate != 0 && candidate <= min) {
 						min = candidate;
 						minIdx = g;
 					}
@@ -255,16 +280,14 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 				float min = Float.MAX_VALUE;
 				for (int h = 0; h < this.l; h++) {
 					float candidate = 0;
-					PreferenceArray prefs = dataModel.getPreferencesForItem(itemID);
-					for (Preference preference : prefs) {
-						long userID = preference.getUserID();
-						float rating = preference.getValue();
-						int g = this.Rho.get(userID).get();
-						float x = rating - this.ACOC.get(g).get(h).compute() - this.AR.get(userID).compute()
-								+ this.ARC.get(g).compute() - this.AC.get(itemID).compute() + this.ACC.get(h).compute();
-						candidate += x * x;
+					for (int g = 0; g < this.k; g++) {
+						Float x = this.Atmp3.get(itemID).get(g).compute();
+						if (!Float.isNaN(x)) {
+							candidate += x - this.ACOC.get(g).get(h).compute()
+								+ this.ARC.get(g).compute() + this.ACC.get(h).compute();
+						}
 					}
-					if (prefs.length() != 0 && candidate <= min) {
+					if (candidate != 0 && candidate <= min) {
 						min = candidate;
 						minIdx = h;
 					}
@@ -277,6 +300,7 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 
 			iterNb++;
 		} while (iterNb < iter && nbChanged > 0);
+		log.info("Did {} iterations, max was {}, last round had {} changings", iterNb, iter, nbChanged);
 		return iterNb;
 	}
 
