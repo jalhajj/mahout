@@ -40,6 +40,7 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 	private FastByIDMap<Average> AC;
 	private FastByIDMap<Index> Rho;
 	private FastByIDMap<Index> Gamma;
+	private FastByIDMap<Float> bias;
 	private final RefreshHelper refreshHelper;
 	
 	private static final Logger log = LoggerFactory.getLogger(COCLUSTRecommender.class);
@@ -102,6 +103,7 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 		this.AC = new FastByIDMap<Average>(m);
 		this.Rho = new FastByIDMap<Index>(n);
 		this.Gamma = new FastByIDMap<Index>(m);
+		this.bias = new FastByIDMap<Float>(n);
 
 		log.info("Done with initialization, about to start training");
 		train();
@@ -152,6 +154,26 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 		}
 
 		iterate(this.nbMaxIterations);
+		
+		/* Post processing to compute bias */
+		itU = dataModel.getUserIDs();
+		while (itU.hasNext()) {
+			long userID = itU.nextLong();
+			int g = this.Rho.get(userID).get();
+			Average userRealAvg = new Average();
+			Average userPredAvg = new Average();
+			PreferenceArray prefs = dataModel.getPreferencesFromUser(userID);
+			for (Preference preference : prefs) {
+				long itemID = preference.getItemID();
+				int h = this.Gamma.get(itemID).get();
+				float rating = preference.getValue();
+				userRealAvg.add(rating);
+				float x = this.AR.get(userID).compute() + this.AC.get(itemID).compute() - this.ARC.get(g).compute()
+						- this.ACC.get(h).compute() + this.ACOC.get(g).get(h).compute();
+				userPredAvg.add(x);
+			}
+			this.bias.put(userID, userRealAvg.compute() - userPredAvg.compute());
+		}
 
 	}
 
@@ -317,7 +339,7 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 			if (this.Gamma.containsKey(itemID)) {
 				int h = this.Gamma.get(itemID).get();
 				estimate = this.AR.get(userID).compute() + this.AC.get(itemID).compute() - this.ARC.get(g).compute()
-						- this.ACC.get(h).compute() + this.ACOC.get(g).get(h).compute();
+						- this.ACC.get(h).compute() + this.ACOC.get(g).get(h).compute() + this.bias.get(userID);
 			} else {
 				estimate = this.AR.get(userID).compute();
 			}
