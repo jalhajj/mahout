@@ -8,11 +8,14 @@ import java.util.Random;
 import java.util.concurrent.Callable;
 
 import com.google.common.base.Preconditions;
+
+import org.apache.commons.math3.distribution.NormalDistribution;
 import org.apache.mahout.cf.taste.common.Refreshable;
 import org.apache.mahout.cf.taste.common.TasteException;
 import org.apache.mahout.cf.taste.impl.common.Average;
 import org.apache.mahout.cf.taste.impl.common.FastByIDMap;
 import org.apache.mahout.cf.taste.impl.common.FastIDSet;
+import org.apache.mahout.cf.taste.impl.common.FullRunningAverageAndStdDev;
 import org.apache.mahout.cf.taste.impl.common.LongPrimitiveIterator;
 import org.apache.mahout.cf.taste.impl.common.RefreshHelper;
 import org.apache.mahout.cf.taste.impl.recommender.AbstractRecommender;
@@ -342,21 +345,21 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 						- this.ACC.get(h).compute() + this.ACOC.get(g).get(h).compute() + this.bias.get(userID);
 			} else {
 				estimate = this.AR.get(userID).compute();
+				estimate = Float.NaN;
 			}
 		} else {
 			if (this.Gamma.containsKey(itemID)) {
 				estimate = this.AC.get(itemID).compute();
+				estimate = Float.NaN;
 			} else {
-				estimate = 0;
+				estimate = Float.NaN;
 			}
 		}
 		return (float) estimate;
 	}
 
 	public double getTrainingError() throws TasteException {
-
-		double sum = 0;
-
+		TrainingError error = new TrainingError(this.k, this.l);
 		DataModel dataModel = getDataModel();
 		LongPrimitiveIterator it = dataModel.getUserIDs();
 		while (it.hasNext()) {
@@ -370,12 +373,11 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 					float rating = pref.getValue();
 					float x = rating - this.ACOC.get(g).get(h).compute() - this.AR.get(userID).compute()
 							+ this.ARC.get(g).compute() - this.AC.get(itemID).compute() + this.ACC.get(h).compute();
-					sum += x * x;
+					error.add(x, g, h);
 				}
 			}
 		}
-		return sum;
-
+		return error.get();
 	}
 
 	private final class Estimator implements TopItems.Estimator<Long> {
@@ -415,6 +417,78 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 		void set(int n) {
 			this.idx = n;
 		}
+	}
+	
+	private class TrainingError {
+
+		private final List<List<List<Float>>> errors;
+		private final int k;
+		private final int l;
+
+		TrainingError(int k, int l) {
+			this.k = k;
+			this.l = l;
+			this.errors = new ArrayList<List<List<Float>>>(this.k);
+			for (int i = 0; i < this.k; i++) {
+				List<List<Float>> list = new ArrayList<List<Float>>(this.l);
+				for (int j = 0; j < this.l; j++) {
+					list.add(new ArrayList<Float>());
+				}
+				this.errors.add(list);
+			}
+		}
+
+		void add(float err, int i, int j) {
+			this.errors.get(i).get(j).add(err * err);
+		}
+
+		boolean passAndersonDarlingTest(int i, int j) {
+			List<Float> values = this.errors.get(i).get(j);
+			int n = values.size();
+			if (n < 2) {
+				return true;
+			}
+			double mean = 0;
+			for (float x : values) {
+				mean += x;
+			}
+			mean = mean / (double) (n);
+			double stdev = 0;
+			for (float x : values) {
+				stdev += Math.pow(x - mean, 2);
+			}
+			stdev = Math.sqrt(stdev / (double) (n - 1));
+			double A = 0;
+			int d = 1;
+			for (float x : values) {
+				double y = (x - mean) / stdev;
+				double z = new NormalDistribution(mean, stdev).cumulativeProbability(y);
+				A += (2 * d - 1) * Math.log(z) + (2 * (n - d) + 1) * Math.log(1 - z);
+				d++;
+			}
+			A = (- n - A / (double) (n)) * (1 + 4 / (double) (n)  - 25 / Math.pow(n, 2));
+			if (A >= 0.787) {
+				return false;
+			} else {
+				return true;
+			}
+		}
+
+		double get() {
+			Average avg = new Average();
+			for (int i = 0; i < this.k; i++) {
+				for (int j = 0; j < this.l; j++) {
+					if (this.passAndersonDarlingTest(i, j)) {
+						avg.add(1);
+					} else {
+						avg.add(0);
+					}
+					
+				}
+			}
+			return avg.compute();
+		}
+
 	}
 
 }

@@ -26,6 +26,10 @@ public class Average {
 		this.cnt++;
 		this.valValid = false;
 	}
+	
+	public int getCount() {
+		return this.cnt;
+	}
 
 	public float compute() {
 		if (!this.valValid) {
