@@ -45,7 +45,11 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 	private FastByIDMap<Index> Gamma;
 	private FastByIDMap<Float> bias;
 	private final RefreshHelper refreshHelper;
-	
+
+	private PredictionError trainingErr;
+	private PredictionError testingErr;
+	private BiclusterStatistics biStats;
+
 	private static final Logger log = LoggerFactory.getLogger(COCLUSTRecommender.class);
 
 	/**
@@ -157,7 +161,7 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 		}
 
 		iterate(this.nbMaxIterations);
-		
+
 		/* Post processing to compute bias */
 		itU = dataModel.getUserIDs();
 		while (itU.hasNext()) {
@@ -192,7 +196,7 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 		do {
 			log.info("Convergence loop: iteration #{}, previous rounds had {} changings", iterNb, nbChanged);
 			nbChanged = 0;
-			
+
 			this.ACOC = new ArrayList<ArrayList<Average>>(this.k);
 			this.ARC = new ArrayList<Average>(this.k);
 			this.ACC = new ArrayList<Average>(this.l);
@@ -237,7 +241,7 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 					} else {
 						avgCOC.add(rating);
 					}
-					
+
 				}
 			}
 
@@ -311,7 +315,7 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 			throws TasteException {
 		Preconditions.checkArgument(howMany >= 0, "howMany must be at least 0");
 		log.debug("Recommending items for user ID '{}'", userID);
-		
+
 		if (howMany == 0) {
 			return Collections.emptyList();
 		}
@@ -342,15 +346,13 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 			if (this.Gamma.containsKey(itemID)) {
 				int h = this.Gamma.get(itemID).get();
 				estimate = this.AR.get(userID).compute() + this.AC.get(itemID).compute() - this.ARC.get(g).compute()
-						- this.ACC.get(h).compute() + this.ACOC.get(g).get(h).compute() + this.bias.get(userID);
+						- this.ACC.get(h).compute() + this.ACOC.get(g).get(h).compute();// + this.bias.get(userID);
 			} else {
 				estimate = this.AR.get(userID).compute();
-				estimate = Float.NaN;
 			}
 		} else {
 			if (this.Gamma.containsKey(itemID)) {
 				estimate = this.AC.get(itemID).compute();
-				estimate = Float.NaN;
 			} else {
 				estimate = Float.NaN;
 			}
@@ -358,8 +360,9 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 		return (float) estimate;
 	}
 
-	public double getTrainingError() throws TasteException {
-		TrainingError error = new TrainingError(this.k, this.l);
+	public void runTrainingError() throws TasteException {
+		biStats = new BiclusterStatistics(this.k, this.l);
+		trainingErr = new PredictionError(this.k, this.l);
 		DataModel dataModel = getDataModel();
 		LongPrimitiveIterator it = dataModel.getUserIDs();
 		while (it.hasNext()) {
@@ -373,11 +376,66 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 					float rating = pref.getValue();
 					float x = rating - this.ACOC.get(g).get(h).compute() - this.AR.get(userID).compute()
 							+ this.ARC.get(g).compute() - this.AC.get(itemID).compute() + this.ACC.get(h).compute();
-					error.add(x, g, h);
+					biStats.add(rating, g, h);
+					trainingErr.add(x, g, h);
 				}
 			}
 		}
-		return error.get();
+	}
+
+	public void addTestingError(float err, long userID, long itemID) {
+		if (testingErr == null) {
+			testingErr = new PredictionError(this.k, this.l);
+		}
+		try {
+			int g = this.Rho.get(userID).get();
+			int h = this.Gamma.get(itemID).get();
+			testingErr.add(err, g, h);
+		} catch (NullPointerException ex) {
+		}
+	}
+
+	public String getInfo() throws TasteException {
+
+		List<Integer> kCnts = new ArrayList<Integer>(this.k);
+		for (int i = 0; i < this.k; i++) {
+			kCnts.add(0);
+		}
+		List<Integer> lCnts = new ArrayList<Integer>(this.l);
+		for (int j = 0; j < this.l; j++) {
+			lCnts.add(0);
+		}
+		LongPrimitiveIterator it;
+		DataModel dataModel = this.getDataModel();
+		it = dataModel.getUserIDs();
+		while (it.hasNext()) {
+			long userID = it.nextLong();
+			int g = this.Rho.get(userID).get();
+			kCnts.set(g, kCnts.get(g) + 1);
+		}
+		it = dataModel.getItemIDs();
+		while (it.hasNext()) {
+			long itemID = it.nextLong();
+			int h = this.Gamma.get(itemID).get();
+			lCnts.set(h, lCnts.get(h) + 1);
+		}
+
+		int n = dataModel.getNumUsers();
+		int m = dataModel.getNumItems();
+
+		String s = String.format("%n");
+		for (int i = 0; i < this.k; i++) {
+			for (int j = 0; j < this.l; j++) {
+				int cnt = trainingErr.getCount(i, j);
+				double sparsity = 1 - (double) (cnt) / (double) (kCnts.get(i) * lCnts.get(j));
+				double coverage = (double) (kCnts.get(i) * lCnts.get(j)) / (double) (n * m);
+				s += String.format(
+						"Bicluster %d:%d, testing RMSE is %g, training RMSE is %g, number of training cells is %d, sparsity is %g, coverage is %g, true mean is %g, true stdev is %g%n",
+						i, j, testingErr.getRMSE(i, j), trainingErr.getRMSE(i, j), cnt, sparsity, coverage,
+						biStats.getMean(i, j), biStats.getStd(i, j));
+			}
+		}
+		return s;
 	}
 
 	private final class Estimator implements TopItems.Estimator<Long> {
@@ -418,14 +476,47 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 			this.idx = n;
 		}
 	}
-	
-	private class TrainingError {
+
+	private class BiclusterStatistics {
+
+		private final List<List<FullRunningAverageAndStdDev>> stats;
+		private final int k;
+		private final int l;
+
+		BiclusterStatistics(int k, int l) {
+			this.k = k;
+			this.l = l;
+			this.stats = new ArrayList<List<FullRunningAverageAndStdDev>>(this.k);
+			for (int i = 0; i < this.k; i++) {
+				List<FullRunningAverageAndStdDev> list = new ArrayList<FullRunningAverageAndStdDev>(this.l);
+				for (int j = 0; j < this.l; j++) {
+					list.add(new FullRunningAverageAndStdDev());
+				}
+				this.stats.add(list);
+			}
+		}
+
+		void add(float v, int i, int j) {
+			this.stats.get(i).get(j).addDatum(v);
+		}
+
+		double getMean(int i, int j) {
+			return this.stats.get(i).get(j).getAverage();
+		}
+
+		double getStd(int i, int j) {
+			return this.stats.get(i).get(j).getStandardDeviation();
+		}
+
+	}
+
+	private class PredictionError {
 
 		private final List<List<List<Float>>> errors;
 		private final int k;
 		private final int l;
 
-		TrainingError(int k, int l) {
+		PredictionError(int k, int l) {
 			this.k = k;
 			this.l = l;
 			this.errors = new ArrayList<List<List<Float>>>(this.k);
@@ -440,6 +531,18 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 
 		void add(float err, int i, int j) {
 			this.errors.get(i).get(j).add(err * err);
+		}
+
+		int getCount(int i, int j) {
+			return this.errors.get(i).get(j).size();
+		}
+
+		double getRMSE(int i, int j) {
+			Average avg = new Average();
+			for (float x : this.errors.get(i).get(j)) {
+				avg.add(x);
+			}
+			return Math.sqrt(avg.compute());
 		}
 
 		boolean passAndersonDarlingTest(int i, int j) {
@@ -466,7 +569,7 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 				A += (2 * d - 1) * Math.log(z) + (2 * (n - d) + 1) * Math.log(1 - z);
 				d++;
 			}
-			A = (- n - A / (double) (n)) * (1 + 4 / (double) (n)  - 25 / Math.pow(n, 2));
+			A = (-n - A / (double) (n)) * (1 + 4 / (double) (n) - 25 / Math.pow(n, 2));
 			if (A >= 0.787) {
 				return false;
 			} else {
@@ -483,7 +586,7 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 					} else {
 						avg.add(0);
 					}
-					
+
 				}
 			}
 			return avg.compute();
