@@ -33,7 +33,7 @@ public final class KFoldRecommenderPredictionEvaluator {
 		Preconditions.checkArgument(nbFolds > 1, "nbFolds must be > 1");
 
 		this.dataModel = dataModel;
-		this.folds = new KFoldDataSplitter(dataModel, nbFolds);
+		this.folds = new KFoldDataSplitter(this.dataModel, nbFolds);
 	}
 
 	public KFoldRecommenderPredictionEvaluator(DataModel dataModel, FoldDataSplitter splitter) throws TasteException {
@@ -63,6 +63,7 @@ public final class KFoldRecommenderPredictionEvaluator {
 
 			DataModel trainingModel = fold.getTraining();
 			FastByIDMap<PreferenceArray> testPrefs = fold.getTesting();
+			LongPrimitiveIterator it = fold.getUserIDs().iterator();
 
 			Recommender recommender = recommenderBuilder.buildRecommender(trainingModel, fold);
 			COCLUSTRecommender rec = null;
@@ -75,7 +76,6 @@ public final class KFoldRecommenderPredictionEvaluator {
 			int cnt = 0;
 			int noEstCnt = 0;
 
-			LongPrimitiveIterator it = dataModel.getUserIDs();
 			while (it.hasNext()) {
 
 				long userID = it.nextLong();

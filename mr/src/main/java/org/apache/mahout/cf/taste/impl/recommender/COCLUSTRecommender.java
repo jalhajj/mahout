@@ -424,16 +424,28 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 		int m = dataModel.getNumItems();
 
 		String s = String.format("%n");
+//		for (int i = 0; i < this.k; i++) {
+//			for (int j = 0; j < this.l; j++) {
+//				int cnt = trainingErr.getCount(i, j);
+//				double sparsity = 1 - (double) (cnt) / (double) (kCnts.get(i) * lCnts.get(j));
+//				double coverage = (double) (kCnts.get(i) * lCnts.get(j)) / (double) (n * m);
+//				s += String.format(
+//						"Bicluster %d:%d, testing RMSE is %g, training RMSE is %g, number of training cells is %d, sparsity is %g, coverage is %g, true mean is %g, true stdev is %g%n",
+//						i, j, testingErr.getRMSE(i, j), trainingErr.getRMSE(i, j), cnt, sparsity, coverage,
+//						biStats.getMean(i, j), biStats.getStd(i, j));
+//			}
+//		}
 		for (int i = 0; i < this.k; i++) {
-			for (int j = 0; j < this.l; j++) {
-				int cnt = trainingErr.getCount(i, j);
-				double sparsity = 1 - (double) (cnt) / (double) (kCnts.get(i) * lCnts.get(j));
-				double coverage = (double) (kCnts.get(i) * lCnts.get(j)) / (double) (n * m);
-				s += String.format(
-						"Bicluster %d:%d, testing RMSE is %g, training RMSE is %g, number of training cells is %d, sparsity is %g, coverage is %g, true mean is %g, true stdev is %g%n",
-						i, j, testingErr.getRMSE(i, j), trainingErr.getRMSE(i, j), cnt, sparsity, coverage,
-						biStats.getMean(i, j), biStats.getStd(i, j));
-			}
+			int cnt = trainingErr.getCount(i, -1);
+			double sparsity = 1 - (double) (cnt) / (double) (kCnts.get(i) * m);
+			s += String.format("Bicluster %d:-, testing RMSE is %g, training RMSE is %g, sparsity is %g%n", i,
+					testingErr.getRMSE(i, -1), trainingErr.getRMSE(i, -1), sparsity);
+		}
+		for (int j = 0; j < this.l; j++) {
+			int cnt = trainingErr.getCount(-1, j);
+			double sparsity = 1 - (double) (cnt) / (double) (n * lCnts.get(j));
+			s += String.format("Bicluster -:%d, testing RMSE is %g, training RMSE is %g, sparsity is %g%n", j,
+					testingErr.getRMSE(-1, j), trainingErr.getRMSE(-1, j), sparsity);
 		}
 		return s;
 	}
@@ -512,85 +524,104 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 
 	private class PredictionError {
 
-		private final List<List<List<Float>>> errors;
+		private final List<List<Float>> kerrors;
+		private final List<List<Float>> lerrors;
 		private final int k;
 		private final int l;
 
 		PredictionError(int k, int l) {
 			this.k = k;
 			this.l = l;
-			this.errors = new ArrayList<List<List<Float>>>(this.k);
+			this.kerrors = new ArrayList<List<Float>>(this.k);
+			this.lerrors = new ArrayList<List<Float>>(this.l);
 			for (int i = 0; i < this.k; i++) {
-				List<List<Float>> list = new ArrayList<List<Float>>(this.l);
-				for (int j = 0; j < this.l; j++) {
-					list.add(new ArrayList<Float>());
-				}
-				this.errors.add(list);
+				kerrors.add(new ArrayList<Float>());
+			}
+			for (int j = 0; j < this.l; j++) {
+				lerrors.add(new ArrayList<Float>());
 			}
 		}
 
 		void add(float err, int i, int j) {
-			this.errors.get(i).get(j).add(err * err);
+			float x = err * err;
+			this.kerrors.get(i).add(x);
+			this.lerrors.get(j).add(x);
 		}
 
 		int getCount(int i, int j) {
-			return this.errors.get(i).get(j).size();
+			if (j < 0) {
+				return this.kerrors.get(i).size();
+			} else if (i < 0) {
+				return this.lerrors.get(j).size();
+			} else {
+				return 0;
+			}
 		}
 
 		double getRMSE(int i, int j) {
-			Average avg = new Average();
-			for (float x : this.errors.get(i).get(j)) {
-				avg.add(x);
-			}
-			return Math.sqrt(avg.compute());
-		}
-
-		boolean passAndersonDarlingTest(int i, int j) {
-			List<Float> values = this.errors.get(i).get(j);
-			int n = values.size();
-			if (n < 2) {
-				return true;
-			}
-			double mean = 0;
-			for (float x : values) {
-				mean += x;
-			}
-			mean = mean / (double) (n);
-			double stdev = 0;
-			for (float x : values) {
-				stdev += Math.pow(x - mean, 2);
-			}
-			stdev = Math.sqrt(stdev / (double) (n - 1));
-			double A = 0;
-			int d = 1;
-			for (float x : values) {
-				double y = (x - mean) / stdev;
-				double z = new NormalDistribution(mean, stdev).cumulativeProbability(y);
-				A += (2 * d - 1) * Math.log(z) + (2 * (n - d) + 1) * Math.log(1 - z);
-				d++;
-			}
-			A = (-n - A / (double) (n)) * (1 + 4 / (double) (n) - 25 / Math.pow(n, 2));
-			if (A >= 0.787) {
-				return false;
-			} else {
-				return true;
-			}
-		}
-
-		double get() {
-			Average avg = new Average();
-			for (int i = 0; i < this.k; i++) {
-				for (int j = 0; j < this.l; j++) {
-					if (this.passAndersonDarlingTest(i, j)) {
-						avg.add(1);
-					} else {
-						avg.add(0);
-					}
-
+			if (j < 0) {
+				Average avg = new Average();
+				for (float x : this.kerrors.get(i)) {
+					avg.add(x);
 				}
+				return Math.sqrt(avg.compute());
+			} else if (i < 0) {
+				Average avg = new Average();
+				for (float x : this.lerrors.get(j)) {
+					avg.add(x);
+				}
+				return Math.sqrt(avg.compute());
+			} else {
+				return Double.NaN;
 			}
-			return avg.compute();
 		}
+
+//		boolean passAndersonDarlingTest(int i, int j) {
+//			List<Float> values = this.errors.get(i).get(j);
+//			int n = values.size();
+//			if (n < 2) {
+//				return true;
+//			}
+//			double mean = 0;
+//			for (float x : values) {
+//				mean += x;
+//			}
+//			mean = mean / (double) (n);
+//			double stdev = 0;
+//			for (float x : values) {
+//				stdev += Math.pow(x - mean, 2);
+//			}
+//			stdev = Math.sqrt(stdev / (double) (n - 1));
+//			double A = 0;
+//			int d = 1;
+//			for (float x : values) {
+//				double y = (x - mean) / stdev;
+//				double z = new NormalDistribution(mean, stdev).cumulativeProbability(y);
+//				A += (2 * d - 1) * Math.log(z) + (2 * (n - d) + 1) * Math.log(1 - z);
+//				d++;
+//			}
+//			A = (-n - A / (double) (n)) * (1 + 4 / (double) (n) - 25 / Math.pow(n, 2));
+//			if (A >= 0.787) {
+//				return false;
+//			} else {
+//				return true;
+//			}
+//		}
+//
+//		double get() {
+//			Average avg = new Average();
+//			for (int i = 0; i < this.k; i++) {
+//				for (int j = 0; j < this.l; j++) {
+//					if (this.passAndersonDarlingTest(i, j)) {
+//						avg.add(1);
+//					} else {
+//						avg.add(0);
+//					}
+//
+//				}
+//			}
+//			return avg.compute();
+//		}
 
 	}
 

@@ -3,6 +3,7 @@ package org.apache.mahout.cf.taste.impl.eval;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+
 import org.apache.mahout.cf.taste.common.NoSuchUserException;
 import org.apache.mahout.cf.taste.common.TasteException;
 import org.apache.mahout.cf.taste.eval.IRStatistics;
@@ -45,6 +46,27 @@ public final class KFoldRecommenderIRStatsEvaluator {
 
 		this.dataModel = dataModel;
 		this.folds = splitter;
+	}
+	
+	public void restrainUserIDsWithCoverage(RecommenderBuilder recommenderBuilder, int at) throws TasteException {
+		Preconditions.checkArgument(recommenderBuilder != null, "recommenderBuilder is null");
+		Iterator<Fold> itF = this.folds.getFolds();
+		while (itF.hasNext()) {
+			Fold fold = itF.next();
+			DataModel trainingModel = fold.getTraining();
+			LongPrimitiveIterator it = fold.getUserIDs().iterator();
+			Recommender recommender = recommenderBuilder.buildRecommender(trainingModel, fold);
+			FastIDSet ids = new FastIDSet();
+			while (it.hasNext()) {
+				long userID = it.nextLong();
+				List<RecommendedItem> recommendedItems = recommender.recommend(userID, at);
+				int numRecommendedItems = recommendedItems.size();
+				if (numRecommendedItems == 0) {
+					ids.add(userID);
+				}
+			}
+			fold.removeUserIDs(ids);
+		}
 	}
 
 	public IRStatistics evaluate(RecommenderBuilder recommenderBuilder, int at, double relevanceThreshold)
@@ -93,6 +115,7 @@ public final class KFoldRecommenderIRStatsEvaluator {
 
 			DataModel trainingModel = fold.getTraining();
 			FastByIDMap<PreferenceArray> testPrefs = fold.getTesting();
+			LongPrimitiveIterator it = fold.getUserIDs().iterator();
 
 			Recommender recommender = recommenderBuilder.buildRecommender(trainingModel, fold);
 
@@ -129,7 +152,6 @@ public final class KFoldRecommenderIRStatsEvaluator {
 
 			FastIDSet recItems = new FastIDSet();
 
-			LongPrimitiveIterator it = dataModel.getUserIDs();
 			while (it.hasNext()) {
 
 				long userID = it.nextLong();
