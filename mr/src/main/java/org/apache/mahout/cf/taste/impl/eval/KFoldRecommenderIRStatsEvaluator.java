@@ -61,7 +61,7 @@ public final class KFoldRecommenderIRStatsEvaluator {
 				long userID = it.nextLong();
 				List<RecommendedItem> recommendedItems = recommender.recommend(userID, at);
 				int numRecommendedItems = recommendedItems.size();
-				if (numRecommendedItems == 0) {
+				if (numRecommendedItems < at) {
 					ids.add(userID);
 				}
 			}
