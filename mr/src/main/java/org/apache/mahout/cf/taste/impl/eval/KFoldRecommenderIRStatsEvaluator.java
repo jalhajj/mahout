@@ -61,7 +61,7 @@ public final class KFoldRecommenderIRStatsEvaluator {
 				long userID = it.nextLong();
 				List<RecommendedItem> recommendedItems = recommender.recommend(userID, at);
 				int numRecommendedItems = recommendedItems.size();
-				if (numRecommendedItems < at) {
+				if (numRecommendedItems < 1) {
 					ids.add(userID);
 				}
 			}
@@ -210,8 +210,8 @@ public final class KFoldRecommenderIRStatsEvaluator {
 
 				// Precision
 				double p = 0;
-				if (numRecommendedItems > 0) {
-					p = (double) intersectionSize / (double) numRecommendedItems;
+				if (at > 0) {
+					p = (double) intersectionSize / (double) at;
 					precisionFold.addDatum(p);
 					precisionFoldList.get(group).addDatum(p);
 				}
