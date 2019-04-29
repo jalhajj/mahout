@@ -130,6 +130,8 @@ public final class KFoldRecommenderPredictionEvaluator {
 				rec.runTrainingError();
 				info = rec.getInfo();
 			}
+			
+			k++;
 
 		}
 

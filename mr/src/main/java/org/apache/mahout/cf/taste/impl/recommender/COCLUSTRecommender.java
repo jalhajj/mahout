@@ -112,7 +112,7 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 		this.Gamma = new FastByIDMap<Index>(m);
 		this.bias = new FastByIDMap<Float>(n);
 
-		log.info("Done with initialization, about to start training");
+		log.debug("Done with initialization, about to start training");
 		train();
 	}
 
@@ -135,11 +135,11 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 		LongPrimitiveIterator itU;
 
 		/* Randomly initialize biclusters */
-		log.info("Starting with random biclusters");
+		log.debug("Starting with random biclusters");
 		randomInit();
 
 		/* Pre-compute AR and AC */
-		log.info("Pre-computing rows and columns averages");
+		log.debug("Pre-computing rows and columns averages");
 		itU = dataModel.getUserIDs();
 		while (itU.hasNext()) {
 			long userID = itU.nextLong();
@@ -194,7 +194,7 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 		int iterNb = 0;
 		int nbChanged = 0;
 		do {
-			log.info("Convergence loop: iteration #{}, previous rounds had {} changings", iterNb, nbChanged);
+			log.debug("Convergence loop: iteration #{}, previous rounds had {} changings", iterNb, nbChanged);
 			nbChanged = 0;
 
 			this.ACOC = new ArrayList<ArrayList<Average>>(this.k);
@@ -213,7 +213,7 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 			}
 
 			/* Compute averages */
-			log.info("Compute biclusters averages");
+			log.debug("Compute biclusters averages");
 			itU = dataModel.getUserIDs();
 			while (itU.hasNext()) {
 				long userID = itU.nextLong();
@@ -246,7 +246,7 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 			}
 
 			/* Update row assignment */
-			log.info("Update row assignments");
+			log.debug("Update row assignments");
 			itU = dataModel.getUserIDs();
 			while (itU.hasNext()) {
 				long userID = itU.nextLong();
@@ -276,7 +276,7 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 			}
 
 			/* Update column assignment */
-			log.info("Update column assignments");
+			log.debug("Update column assignments");
 			itI = dataModel.getItemIDs();
 			while (itI.hasNext()) {
 				long itemID = itI.nextLong();
