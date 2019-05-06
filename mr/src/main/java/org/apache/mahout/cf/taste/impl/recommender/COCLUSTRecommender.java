@@ -13,19 +13,28 @@ import org.apache.commons.math3.distribution.NormalDistribution;
 import org.apache.mahout.cf.taste.common.Refreshable;
 import org.apache.mahout.cf.taste.common.TasteException;
 import org.apache.mahout.cf.taste.impl.common.Average;
+import org.apache.mahout.cf.taste.impl.common.Bicluster;
+import org.apache.mahout.cf.taste.impl.common.Biclustering;
 import org.apache.mahout.cf.taste.impl.common.FastByIDMap;
 import org.apache.mahout.cf.taste.impl.common.FastIDSet;
 import org.apache.mahout.cf.taste.impl.common.FullRunningAverageAndStdDev;
 import org.apache.mahout.cf.taste.impl.common.LongPrimitiveIterator;
 import org.apache.mahout.cf.taste.impl.common.RefreshHelper;
+import org.apache.mahout.cf.taste.impl.model.GenericDataModel;
+import org.apache.mahout.cf.taste.impl.model.GenericPreference;
+import org.apache.mahout.cf.taste.impl.model.GenericUserPreferenceArray;
 import org.apache.mahout.cf.taste.impl.recommender.AbstractRecommender;
 import org.apache.mahout.cf.taste.impl.recommender.TopItems;
+import org.apache.mahout.cf.taste.impl.recommender.svd.Factorizer;
+import org.apache.mahout.cf.taste.impl.recommender.svd.RatingSGDFactorizer;
+import org.apache.mahout.cf.taste.impl.recommender.svd.SVDRecommender;
 import org.apache.mahout.cf.taste.model.DataModel;
 import org.apache.mahout.cf.taste.model.Preference;
 import org.apache.mahout.cf.taste.model.PreferenceArray;
 import org.apache.mahout.cf.taste.recommender.CandidateItemsStrategy;
 import org.apache.mahout.cf.taste.recommender.IDRescorer;
 import org.apache.mahout.cf.taste.recommender.RecommendedItem;
+import org.apache.mahout.cf.taste.recommender.Recommender;
 import org.apache.mahout.common.RandomUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +58,8 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 	private PredictionError trainingErr;
 	private PredictionError testingErr;
 	private BiclusterStatistics biStats;
+	
+	private ArrayList<ArrayList<Recommender>> recs;
 
 	private static final Logger log = LoggerFactory.getLogger(COCLUSTRecommender.class);
 
@@ -181,7 +192,99 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 			}
 			this.bias.put(userID, userRealAvg.compute() - userPredAvg.compute());
 		}
+		
+		/* WIP */
+		
+//		List<List<FastByIDMap<List<Preference>>>> datasets = new ArrayList<List<FastByIDMap<List<Preference>>>>(this.k);
+//		for (int g = 0; g < this.k; g++) {
+//			List<FastByIDMap<List<Preference>>> list = new ArrayList<FastByIDMap<List<Preference>>>(this.l);
+//			for (int h = 0; h < this.l; h++) {
+//				FastByIDMap<List<Preference>> ratings = new FastByIDMap<List<Preference>>();
+//				list.add(ratings);
+//			}
+//			datasets.add(list);
+//		}
+//		
+//		itU = dataModel.getUserIDs();
+//		while (itU.hasNext()) {
+//			long userID = itU.nextLong();
+//			int g = this.Rho.get(userID).get();
+//			PreferenceArray prefs = dataModel.getPreferencesFromUser(userID);
+//			for (Preference preference : prefs) {
+//				long itemID = preference.getItemID();
+//				int h = this.Gamma.get(itemID).get();
+//				FastByIDMap<List<Preference>> ratings = datasets.get(g).get(h);
+//				if (!ratings.containsKey(userID)) {
+//					ratings.put(userID, new ArrayList<Preference>());
+//				}
+//				ratings.get(userID).add(preference);
+//			}
+//		}
+//		
+//		this.recs = new ArrayList<ArrayList<Recommender>>(this.k);
+//		for (int g = 0; g < this.k; g++) {
+//			ArrayList<Recommender> list = new ArrayList<Recommender>(this.l);
+//			for (int h = 0; h < this.l; h++) {
+//				
+//				FastByIDMap<List<Preference>> ratings = datasets.get(g).get(h);
+//				FastByIDMap<PreferenceArray> userData = new FastByIDMap<PreferenceArray>(ratings.size());
+//				itU = ratings.keySetIterator();
+//				while (itU.hasNext()) {
+//					long userID = itU.nextLong();
+//					PreferenceArray a = new GenericUserPreferenceArray(ratings.get(userID).size());
+//					int id = 0;
+//					for (Preference pref : ratings.get(userID)) {
+//						a.set(id, new GenericPreference(userID, pref.getItemID(), pref.getValue()));
+//						id++;
+//					}
+//					userData.put(userID, a);
+//				}
+//				
+//				Factorizer fact = new RatingSGDFactorizer(dataModel, 18, this.nbMaxIterations);
+//				Recommender rec = new SVDRecommender(new GenericDataModel(userData), fact, this.candidateItemsStrategy);
+//				list.add(rec);
+//			}
+//			this.recs.add(list);
+//		}
 
+	}
+	
+	public Biclustering<Long> getBiclustering() throws TasteException {
+		
+		Biclustering<Long> bicl = new Biclustering<Long>();
+		
+		// Init structure
+		List<List<Bicluster<Long>>> biclusters = new ArrayList<List<Bicluster<Long>>>(this.k);
+		for (int g = 0; g < this.k; g++) {
+			List<Bicluster<Long>> list = new ArrayList<Bicluster<Long>>(this.l);
+			for (int h = 0; h < this.l; h++) {
+				Bicluster<Long> b = new Bicluster<Long>();
+				list.add(b);
+				bicl.add(b);
+			}
+			biclusters.add(list);
+		}
+		
+		// Fill with ids
+		DataModel dataModel = this.getDataModel();
+		LongPrimitiveIterator it = dataModel.getUserIDs();
+		while (it.hasNext()) {
+			long userID = it.nextLong();
+			int g = this.Rho.get(userID).get();
+			for (int h = 0; h < this.l; h++) {
+				biclusters.get(g).get(h).addUser(userID);
+			}
+		}
+		it = dataModel.getItemIDs();
+		while (it.hasNext()) {
+			long itemID = it.nextLong();
+			int h = this.Gamma.get(itemID).get();
+			for (int g = 0; g < this.k; g++) {
+				biclusters.get(g).get(h).addItem(itemID);
+			}
+		}
+		
+		return bicl;
 	}
 
 	public int iterate(int iter) throws TasteException {
@@ -241,7 +344,6 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 					} else {
 						avgCOC.add(rating);
 					}
-
 				}
 			}
 

@@ -7,15 +7,15 @@ public class Biclustering<E> {
 	
 	private ArrayList<Bicluster<E>> biclusters; 
 	
-	Biclustering() {
+	public Biclustering() {
 		this.biclusters = new ArrayList<Bicluster<E>>();
 	}
 	
-	void add(Bicluster<E> b) {
+	public void add(Bicluster<E> b) {
 		this.biclusters.add(b);
 	}
 	
-	void remove(Bicluster<E> b) {
+	public void remove(Bicluster<E> b) {
 		this.biclusters.remove(b);
 	}
 	

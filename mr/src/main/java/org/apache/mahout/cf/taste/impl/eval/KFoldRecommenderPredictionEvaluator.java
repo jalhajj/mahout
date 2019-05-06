@@ -51,7 +51,8 @@ public final class KFoldRecommenderPredictionEvaluator {
 
 		RunningAverage mae = new FullRunningAverage();
 		RunningAverage rmse = new FullRunningAverage();
-		RunningAverage noEst = new FullRunningAverage();
+		int noEst = 0;
+		int total = 0;
 		
 		String info = null;
 
@@ -66,15 +67,10 @@ public final class KFoldRecommenderPredictionEvaluator {
 			LongPrimitiveIterator it = fold.getUserIDs().iterator();
 
 			Recommender recommender = recommenderBuilder.buildRecommender(trainingModel, fold);
-			COCLUSTRecommender rec = null;
-			if (recommender instanceof COCLUSTRecommender) {
-				rec = (COCLUSTRecommender) recommender;
-			}
 
 			double smae = 0;
 			double srmse = 0;
 			int cnt = 0;
-			int noEstCnt = 0;
 
 			while (it.hasNext()) {
 
@@ -89,25 +85,21 @@ public final class KFoldRecommenderPredictionEvaluator {
 					long itemID = pref.getItemID();
 					float truth = pref.getValue();
 					try {
+						total++;
 						Float pred = recommender.estimatePreference(userID, itemID);
 						if (!pred.isNaN()) {
 							double x = truth - pred;
 							smae += Math.abs(x);
 							srmse += x * x;
-							cnt++;
-							
-							if (rec != null) {
-								rec.addTestingError((float) (x), userID, itemID);
-							}
-							
+							cnt++;			
 						} else {
-							noEstCnt++;
+							noEst++;
 						}
 					} catch (NoSuchUserException nsee) {
-						noEstCnt += prefs.length();
-						break;
+						noEst++;
+						continue;
 					} catch (NoSuchItemException nsie) {
-						noEstCnt++;
+						noEst++;
 						continue;
 					}
 				}
@@ -122,21 +114,17 @@ public final class KFoldRecommenderPredictionEvaluator {
 			}
 			mae.addDatum(imae);
 			rmse.addDatum(irmse);
-			noEst.addDatum(noEstCnt);
 			
-			log.info("Results for fold {} are: mae={}, rmse={}, noEstCnt={}", k, imae, irmse, noEstCnt);
-			
-			if (rec != null) {
-				rec.runTrainingError();
-				info = rec.getInfo();
-			}
+			log.info("Results for fold {} are: mae={}, rmse={}", k, imae, irmse);
 			
 			k++;
 
 		}
 
-		log.info("Final results are: mae={}, rmse={}, noEstCnt={}", mae.getAverage(), rmse.getAverage(), noEst.getAverage());
-		return new PredictionStatisticsImpl(mae.getAverage(), rmse.getAverage(), noEst.getAverage(), info);
+		double noEstPer = noEst / (double) total; 
+		
+		log.info("Final results are: mae={}, rmse={}, noEstPer={}", mae.getAverage(), rmse.getAverage(), noEstPer);
+		return new PredictionStatisticsImpl(mae.getAverage(), rmse.getAverage(), noEstPer, info);
 
 	}
 

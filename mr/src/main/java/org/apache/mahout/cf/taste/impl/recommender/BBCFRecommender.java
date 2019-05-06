@@ -16,6 +16,8 @@ import org.apache.mahout.cf.taste.impl.common.RefreshHelper;
 import org.apache.mahout.cf.taste.impl.model.GenericDataModel;
 import org.apache.mahout.cf.taste.impl.model.GenericPreference;
 import org.apache.mahout.cf.taste.impl.model.GenericUserPreferenceArray;
+import org.apache.mahout.cf.taste.impl.recommender.svd.RatingSGDFactorizer;
+import org.apache.mahout.cf.taste.impl.recommender.svd.SVDRecommender;
 import org.apache.mahout.cf.taste.impl.similarity.PearsonCorrelationSimilarity;
 import org.apache.mahout.cf.taste.model.DataModel;
 import org.apache.mahout.cf.taste.model.PreferenceArray;
@@ -39,9 +41,10 @@ public class BBCFRecommender extends AbstractRecommender {
 	private final UserBiclusterSimilarity similarity;
 	private final RefreshHelper refreshHelper;
 	private FastByIDMap<Recommender> subrecs;
+	private Recommender backup;
 
 	public BBCFRecommender(DataModel dataModel, UserBiclusterNeighborhood neighborhood,
-			UserBiclusterSimilarity similarity) {
+			UserBiclusterSimilarity similarity) throws TasteException {
 		super(dataModel);
 		Preconditions.checkArgument(neighborhood != null, "neighborhood is null");
 		this.neighborhood = neighborhood;
@@ -60,10 +63,12 @@ public class BBCFRecommender extends AbstractRecommender {
 		refreshHelper.addDependency(dataModel);
 		refreshHelper.addDependency(similarity);
 		refreshHelper.addDependency(neighborhood);
+//		this.backup = new SVDRecommender(dataModel, new RatingSGDFactorizer(dataModel, 18, 30),
+//				this.candidateItemsStrategy);
 	}
-	
+
 	public BBCFRecommender(DataModel dataModel, UserBiclusterNeighborhood neighborhood,
-			UserBiclusterSimilarity similarity, CandidateItemsStrategy strategy) {
+			UserBiclusterSimilarity similarity, CandidateItemsStrategy strategy) throws TasteException {
 		super(dataModel, strategy);
 		Preconditions.checkArgument(neighborhood != null, "neighborhood is null");
 		this.neighborhood = neighborhood;
@@ -82,6 +87,8 @@ public class BBCFRecommender extends AbstractRecommender {
 		refreshHelper.addDependency(dataModel);
 		refreshHelper.addDependency(similarity);
 		refreshHelper.addDependency(neighborhood);
+//		this.backup = new SVDRecommender(dataModel, new RatingSGDFactorizer(dataModel, 18, 30),
+//				this.candidateItemsStrategy);
 	}
 
 	public UserBiclusterSimilarity getSimilarity() {
@@ -96,7 +103,7 @@ public class BBCFRecommender extends AbstractRecommender {
 		log.debug("Recommending items for user ID '{}'", userID);
 
 		List<Bicluster<Long>> theNeighborhood = neighborhood.getUserNeighborhood(userID);
-		
+
 		if (howMany == 0) {
 			return Collections.emptyList();
 		}
@@ -162,7 +169,7 @@ public class BBCFRecommender extends AbstractRecommender {
 			Recommender rec = new GenericItemBasedRecommender(submodel, sim,
 					new PreferredItemsNeighborhoodCandidateItemsStrategy(),
 					new PreferredItemsNeighborhoodCandidateItemsStrategy());
-
+			
 			subrecs.put(userID, rec);
 			return rec;
 		} else {
@@ -177,13 +184,18 @@ public class BBCFRecommender extends AbstractRecommender {
 			try {
 				return rec.estimatePreference(userID, itemID);
 			} catch (NoSuchUserException nsue) {
-				return Float.NaN;
+				return doBackupEstimatePreference(userID, itemID);
 			} catch (NoSuchItemException nsie) {
-				return Float.NaN;
+				return doBackupEstimatePreference(userID, itemID);
 			}
 		} else {
-			return Float.NaN;
+			return doBackupEstimatePreference(userID, itemID);
 		}
+	}
+
+	private float doBackupEstimatePreference(long userID, long itemID) throws TasteException {
+		return Float.NaN;
+//		return this.backup.estimatePreference(userID, itemID);
 	}
 
 	@Override

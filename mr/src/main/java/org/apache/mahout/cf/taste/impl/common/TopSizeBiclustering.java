@@ -15,7 +15,7 @@ public class TopSizeBiclustering<E> extends Biclustering<E> {
 	}
 	
 	@Override
-	void add(Bicluster<E> b) {
+	public void add(Bicluster<E> b) {
 		if (this.size() == this.size) {
 			this.qbicl.remove();
 		}

@@ -21,11 +21,13 @@ public class QUBIC extends AbstractBiclusteringAlgorithm {
 	
 	private static Logger log = LoggerFactory.getLogger(QUBIC.class);
 
-	private float consistency;
-	private float overlap;
-	private int bcnt;
+	private final float consistency;
+	private final float overlap;
+	private final int bcnt;
+	private final boolean bin;
+	private final float th;
 
-	public QUBIC(DataModel model, float c, int o, float f) throws TasteException {
+	public QUBIC(DataModel model, float c, int o, float f, Float th) throws TasteException {
 		super(model);
 		Preconditions.checkArgument(c > 0 && c <= 1,
 				"Consistency level must be between 0 (exclusive) and 1 (inclusive): " + c);
@@ -37,6 +39,13 @@ public class QUBIC extends AbstractBiclusteringAlgorithm {
 		this.bcnt = o;
 		this.consistency = c;
 		this.overlap = f;
+		if (th == null) {
+			this.th = 0;
+			this.bin = false;
+		} else {
+			this.th = th;
+			this.bin = true;
+		}
 	}
 
 	@Override
@@ -58,7 +67,7 @@ public class QUBIC extends AbstractBiclusteringAlgorithm {
 				if (userID1 < userID2) {
 					double value = 0;
 					for (Preference pref : this.dataModel.getPreferencesFromUser(userID1)) {
-						Float rating = this.dataModel.getPreferenceValue(userID2, pref.getItemID());
+						Float rating = getValueFromRating(this.dataModel.getPreferenceValue(userID2, pref.getItemID()));
 						if (rating != null && rating != 0 && rating == pref.getValue()) {
 							value += 1;
 						}
@@ -125,7 +134,7 @@ public class QUBIC extends AbstractBiclusteringAlgorithm {
 				b.addUser(userID2);
 				
 				for (Preference pref : this.dataModel.getPreferencesFromUser(userID1)) {
-					Float rating = this.dataModel.getPreferenceValue(userID2, pref.getItemID());
+					Float rating = getValueFromRating(this.dataModel.getPreferenceValue(userID2, pref.getItemID()));
 					if (rating != null && rating != 0 && rating == pref.getValue()) {
 						b.addItem(pref.getItemID());
 						dominatingElements.put(pref.getItemID(), rating);
@@ -148,8 +157,8 @@ public class QUBIC extends AbstractBiclusteringAlgorithm {
 						Iterator<Long> itI= b.getItems();
 						while (itI.hasNext()) {
 							long itemID = itI.next();
-							Float r1 = this.dataModel.getPreferenceValue(userID1, itemID);
-							Float r = this.dataModel.getPreferenceValue(userID, itemID);
+							Float r1 = getValueFromRating(this.dataModel.getPreferenceValue(userID1, itemID));
+							Float r = getValueFromRating(this.dataModel.getPreferenceValue(userID, itemID));
 							if (r1 == null || r == null || !r1.equals(r)) {
 								bb.removeItem(itemID);
 								log.debug("Removing item {} ({} != {})", itemID, r, r1);
@@ -176,7 +185,7 @@ public class QUBIC extends AbstractBiclusteringAlgorithm {
 							Iterator<Long> it = b.getUsers();
 							while (it.hasNext()) {
 								long userID = it.next();
-								Float rating = this.dataModel.getPreferenceValue(userID, itemID);
+								Float rating = getValueFromRating(this.dataModel.getPreferenceValue(userID, itemID));
 								if (rating != null) {
 									if (!cnts.containsKey(rating)) {
 										cnts.put(rating, new Counter());
@@ -202,7 +211,7 @@ public class QUBIC extends AbstractBiclusteringAlgorithm {
 									it = b.getItems();
 									while (it.hasNext()) {
 										long otherItemID = it.next();
-										Float rating = this.dataModel.getPreferenceValue(userID, otherItemID);
+										Float rating = getValueFromRating(this.dataModel.getPreferenceValue(userID, otherItemID));
 										if (rating != null && rating != 0 && rating.equals(dominatingElements.get(otherItemID))) {
 											common++;
 										}
@@ -242,6 +251,14 @@ public class QUBIC extends AbstractBiclusteringAlgorithm {
 
 		}
 
+	}
+	
+	private Float getValueFromRating(Float rating) {
+		if (rating == null || !this.bin) {
+			return rating;
+		} else {
+			return (float) (rating >= this.th ? 1 : 0);
+		}
 	}
 	
 	class Counter {

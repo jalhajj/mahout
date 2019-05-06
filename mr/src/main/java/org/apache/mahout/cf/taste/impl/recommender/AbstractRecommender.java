@@ -38,7 +38,7 @@ public abstract class AbstractRecommender implements Recommender {
   private static final Logger log = LoggerFactory.getLogger(AbstractRecommender.class);
   
   private final DataModel dataModel;
-  private final CandidateItemsStrategy candidateItemsStrategy;
+  protected final CandidateItemsStrategy candidateItemsStrategy;
   
   protected AbstractRecommender(DataModel dataModel, CandidateItemsStrategy candidateItemsStrategy) {
     this.dataModel = Preconditions.checkNotNull(dataModel);
