@@ -210,8 +210,8 @@ public final class KFoldRecommenderIRStatsEvaluator {
 
 				// Precision
 				double p = 0;
-				if (at > 0) {
-					p = (double) intersectionSize / (double) at;
+				if (numRecommendedItems > 0) {
+					p = (double) intersectionSize / (double) numRecommendedItems;
 					precisionFold.addDatum(p);
 					precisionFoldList.get(group).addDatum(p);
 				}

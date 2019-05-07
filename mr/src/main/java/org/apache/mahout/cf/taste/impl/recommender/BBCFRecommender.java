@@ -63,8 +63,8 @@ public class BBCFRecommender extends AbstractRecommender {
 		refreshHelper.addDependency(dataModel);
 		refreshHelper.addDependency(similarity);
 		refreshHelper.addDependency(neighborhood);
-//		this.backup = new SVDRecommender(dataModel, new RatingSGDFactorizer(dataModel, 18, 30),
-//				this.candidateItemsStrategy);
+		this.backup = new SVDRecommender(dataModel, new RatingSGDFactorizer(dataModel, 18, 30),
+				this.candidateItemsStrategy);
 	}
 
 	public BBCFRecommender(DataModel dataModel, UserBiclusterNeighborhood neighborhood,
@@ -87,8 +87,8 @@ public class BBCFRecommender extends AbstractRecommender {
 		refreshHelper.addDependency(dataModel);
 		refreshHelper.addDependency(similarity);
 		refreshHelper.addDependency(neighborhood);
-//		this.backup = new SVDRecommender(dataModel, new RatingSGDFactorizer(dataModel, 18, 30),
-//				this.candidateItemsStrategy);
+		this.backup = new SVDRecommender(dataModel, new RatingSGDFactorizer(dataModel, 18, 30),
+				this.candidateItemsStrategy);
 	}
 
 	public UserBiclusterSimilarity getSimilarity() {
@@ -194,8 +194,8 @@ public class BBCFRecommender extends AbstractRecommender {
 	}
 
 	private float doBackupEstimatePreference(long userID, long itemID) throws TasteException {
-		return Float.NaN;
-//		return this.backup.estimatePreference(userID, itemID);
+//		return Float.NaN;
+		return this.backup.estimatePreference(userID, itemID);
 	}
 
 	@Override
