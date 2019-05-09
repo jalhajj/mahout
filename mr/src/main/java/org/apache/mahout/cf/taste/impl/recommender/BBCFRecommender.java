@@ -114,12 +114,12 @@ public class BBCFRecommender extends AbstractRecommender {
 			try {
 				return rec.recommend(userID, howMany, rescorer, includeKnownItems);
 			} catch (NoSuchUserException nsue) {
-				return addBackupRecommendations(userID, howMany, rescorer, includeKnownItems, Collections.emptyList());
+				return addBackupRecommendations(userID, howMany, rescorer, includeKnownItems, Collections.<RecommendedItem>emptyList());
 			} catch (NoSuchItemException nsie) {
-				return addBackupRecommendations(userID, howMany, rescorer, includeKnownItems, Collections.emptyList());
+				return addBackupRecommendations(userID, howMany, rescorer, includeKnownItems, Collections.<RecommendedItem>emptyList());
 			}
 		} else {
-			return addBackupRecommendations(userID, howMany, rescorer, includeKnownItems, Collections.emptyList());
+			return addBackupRecommendations(userID, howMany, rescorer, includeKnownItems, Collections.<RecommendedItem>emptyList());
 		}
 	}
 
