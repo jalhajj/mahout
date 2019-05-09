@@ -1,5 +1,6 @@
 package org.apache.mahout.cf.taste.impl.recommender;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -113,12 +114,12 @@ public class BBCFRecommender extends AbstractRecommender {
 			try {
 				return rec.recommend(userID, howMany, rescorer, includeKnownItems);
 			} catch (NoSuchUserException nsue) {
-				return Collections.emptyList();
+				return addBackupRecommendations(userID, howMany, rescorer, includeKnownItems, Collections.emptyList());
 			} catch (NoSuchItemException nsie) {
-				return Collections.emptyList();
+				return addBackupRecommendations(userID, howMany, rescorer, includeKnownItems, Collections.emptyList());
 			}
 		} else {
-			return Collections.emptyList();
+			return addBackupRecommendations(userID, howMany, rescorer, includeKnownItems, Collections.emptyList());
 		}
 	}
 
@@ -196,6 +197,28 @@ public class BBCFRecommender extends AbstractRecommender {
 	private float doBackupEstimatePreference(long userID, long itemID) throws TasteException {
 //		return Float.NaN;
 		return this.backup.estimatePreference(userID, itemID);
+	}
+	
+	private List<RecommendedItem> addBackupRecommendations(long userID, int howMany, IDRescorer rescorer, boolean includeKnownItems, List<RecommendedItem> l) throws TasteException {
+		int missing = howMany - l.size();
+		List<RecommendedItem> recommendations = new ArrayList<RecommendedItem>(howMany);
+		List<RecommendedItem> more = this.backup.recommend(userID, missing, rescorer, includeKnownItems);
+		for (RecommendedItem item : more) {
+			long itemID = item.getItemID();
+			boolean found = false;
+			for (RecommendedItem otherItem : l) {
+				long otherItemID = otherItem.getItemID();
+				if (itemID == otherItemID) {
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				recommendations.add(item);
+			}
+		}
+		recommendations.addAll(l);
+		return recommendations;
 	}
 
 	@Override
