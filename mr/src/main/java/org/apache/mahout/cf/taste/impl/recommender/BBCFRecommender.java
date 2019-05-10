@@ -112,7 +112,12 @@ public class BBCFRecommender extends AbstractRecommender {
 		Recommender rec = getSubRec(userID, theNeighborhood);
 		if (rec != null) {
 			try {
-				return rec.recommend(userID, howMany, rescorer, includeKnownItems);
+				List<RecommendedItem> l = rec.recommend(userID, howMany, rescorer, includeKnownItems);
+				if (l.size() < howMany) {
+					return addBackupRecommendations(userID, howMany, rescorer, includeKnownItems, l);
+				} else {
+					return l;
+				}
 			} catch (NoSuchUserException nsue) {
 				return addBackupRecommendations(userID, howMany, rescorer, includeKnownItems, Collections.<RecommendedItem>emptyList());
 			} catch (NoSuchItemException nsie) {
