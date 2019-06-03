@@ -91,4 +91,6 @@ public interface IRStatistics {
   
   double getPerRecall();
   
+  double getDiversity();
+  
 }

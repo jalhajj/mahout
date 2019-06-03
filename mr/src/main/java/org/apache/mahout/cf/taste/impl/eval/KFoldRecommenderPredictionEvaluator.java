@@ -67,6 +67,11 @@ public final class KFoldRecommenderPredictionEvaluator {
 			LongPrimitiveIterator it = fold.getUserIDs().iterator();
 
 			Recommender recommender = recommenderBuilder.buildRecommender(trainingModel, fold);
+			
+			if (recommender instanceof COCLUSTRecommender) {
+				COCLUSTRecommender rec = (COCLUSTRecommender) recommender;
+				info = String.valueOf(rec.getTrainingError());
+			}
 
 			double smae = 0;
 			double srmse = 0;

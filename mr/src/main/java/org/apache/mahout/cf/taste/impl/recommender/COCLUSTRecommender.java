@@ -40,11 +40,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class COCLUSTRecommender extends AbstractRecommender {
+	
+	private static double NO_REGULARIZATION = -1;
 
 	private final Random random;
 	private final int k;
 	private final int l;
 	private final int nbMaxIterations;
+	private final double lambda;
 	private ArrayList<ArrayList<Average>> ACOC;
 	private ArrayList<Average> ARC;
 	private ArrayList<Average> ACC;
@@ -55,24 +58,29 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 	private FastByIDMap<Float> bias;
 	private final RefreshHelper refreshHelper;
 
-	private PredictionError trainingErr;
-	private PredictionError testingErr;
-	private BiclusterStatistics biStats;
-	
 	private ArrayList<ArrayList<Recommender>> recs;
 
 	private static final Logger log = LoggerFactory.getLogger(COCLUSTRecommender.class);
 
-	/**
-	 * Create a recommender based on the COCLUST algorithm
-	 *
-	 * @param dataModel
-	 * @param k         number of row clusters
-	 * @param l         number of column clusters
-	 * @param maxIter   maximum number of iterations to train
-	 *
-	 * @throws TasteException
-	 */
+	public COCLUSTRecommender(DataModel dataModel, int nbUserClusters, int nbItemClusters, int maxIter,
+			CandidateItemsStrategy strategy, double lambda) throws TasteException {
+		super(dataModel, strategy);
+		this.random = RandomUtils.getRandom();
+		this.k = nbUserClusters;
+		this.l = nbItemClusters;
+		this.nbMaxIterations = maxIter;
+		this.lambda = lambda;
+		refreshHelper = new RefreshHelper(new Callable<Object>() {
+			@Override
+			public Object call() throws TasteException {
+				train();
+				return null;
+			}
+		});
+		refreshHelper.addDependency(getDataModel());
+		init();
+	}
+	
 	public COCLUSTRecommender(DataModel dataModel, int nbUserClusters, int nbItemClusters, int maxIter,
 			CandidateItemsStrategy strategy) throws TasteException {
 		super(dataModel, strategy);
@@ -80,6 +88,7 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 		this.k = nbUserClusters;
 		this.l = nbItemClusters;
 		this.nbMaxIterations = maxIter;
+		this.lambda = NO_REGULARIZATION;
 		refreshHelper = new RefreshHelper(new Callable<Object>() {
 			@Override
 			public Object call() throws TasteException {
@@ -98,6 +107,7 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 		this.k = nbUserClusters;
 		this.l = nbItemClusters;
 		this.nbMaxIterations = maxIter;
+		this.lambda = NO_REGULARIZATION;
 		refreshHelper = new RefreshHelper(new Callable<Object>() {
 			@Override
 			public Object call() throws TasteException {
@@ -192,9 +202,9 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 			}
 			this.bias.put(userID, userRealAvg.compute() - userPredAvg.compute());
 		}
-		
+
 		/* WIP */
-		
+
 //		List<List<FastByIDMap<List<Preference>>>> datasets = new ArrayList<List<FastByIDMap<List<Preference>>>>(this.k);
 //		for (int g = 0; g < this.k; g++) {
 //			List<FastByIDMap<List<Preference>>> list = new ArrayList<FastByIDMap<List<Preference>>>(this.l);
@@ -248,11 +258,11 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 //		}
 
 	}
-	
+
 	public Biclustering<Long> getBiclustering() throws TasteException {
-		
+
 		Biclustering<Long> bicl = new Biclustering<Long>();
-		
+
 		// Init structure
 		List<List<Bicluster<Long>>> biclusters = new ArrayList<List<Bicluster<Long>>>(this.k);
 		for (int g = 0; g < this.k; g++) {
@@ -264,7 +274,7 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 			}
 			biclusters.add(list);
 		}
-		
+
 		// Fill with ids
 		DataModel dataModel = this.getDataModel();
 		LongPrimitiveIterator it = dataModel.getUserIDs();
@@ -283,7 +293,7 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 				biclusters.get(g).get(h).addItem(itemID);
 			}
 		}
-		
+
 		return bicl;
 	}
 
@@ -366,6 +376,20 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 								+ this.ARC.get(g).compute() - this.AC.get(itemID).compute() + this.ACC.get(h).compute();
 						candidate += x * x;
 					}
+					
+					if (this.lambda != NO_REGULARIZATION) {
+						double max = Double.MIN_VALUE;
+						for (int h = 0; h < this.l; h++) {
+							double x = this.ACOC.get(g).get(h).getCount();
+							if (x >= max) {
+								max = x;
+							}
+						}
+						if (max > Double.MIN_VALUE) {
+							candidate += this.lambda * max;
+						}
+					}
+					
 					if (prefs.length() != 0 && candidate <= min) {
 						min = candidate;
 						minIdx = g;
@@ -396,6 +420,20 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 								+ this.ARC.get(g).compute() - this.AC.get(itemID).compute() + this.ACC.get(h).compute();
 						candidate += x * x;
 					}
+					
+					if (this.lambda != NO_REGULARIZATION) {
+						double max = Double.MIN_VALUE;
+						for (int g = 0; g < this.k; g++) {
+							double x = this.ACOC.get(g).get(h).getCount();
+							if (x >= max) {
+								max = x;
+							}
+						}
+						if (max > Double.MIN_VALUE) {
+							candidate += this.lambda * max;
+						}
+					}
+					
 					if (prefs.length() != 0 && candidate <= min) {
 						min = candidate;
 						minIdx = h;
@@ -462,9 +500,11 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 		return (float) estimate;
 	}
 
-	public void runTrainingError() throws TasteException {
-		biStats = new BiclusterStatistics(this.k, this.l);
-		trainingErr = new PredictionError(this.k, this.l);
+	public double getTrainingError() throws TasteException {
+
+		double sum = 0;
+		int cnt = 0;
+		
 		DataModel dataModel = getDataModel();
 		LongPrimitiveIterator it = dataModel.getUserIDs();
 		while (it.hasNext()) {
@@ -478,78 +518,13 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 					float rating = pref.getValue();
 					float x = rating - this.ACOC.get(g).get(h).compute() - this.AR.get(userID).compute()
 							+ this.ARC.get(g).compute() - this.AC.get(itemID).compute() + this.ACC.get(h).compute();
-					biStats.add(rating, g, h);
-					trainingErr.add(x, g, h);
+					sum += x * x;
+					cnt++;
 				}
 			}
 		}
-	}
+		return Math.sqrt(sum / (double) cnt);
 
-	public void addTestingError(float err, long userID, long itemID) {
-		if (testingErr == null) {
-			testingErr = new PredictionError(this.k, this.l);
-		}
-		try {
-			int g = this.Rho.get(userID).get();
-			int h = this.Gamma.get(itemID).get();
-			testingErr.add(err, g, h);
-		} catch (NullPointerException ex) {
-		}
-	}
-
-	public String getInfo() throws TasteException {
-
-		List<Integer> kCnts = new ArrayList<Integer>(this.k);
-		for (int i = 0; i < this.k; i++) {
-			kCnts.add(0);
-		}
-		List<Integer> lCnts = new ArrayList<Integer>(this.l);
-		for (int j = 0; j < this.l; j++) {
-			lCnts.add(0);
-		}
-		LongPrimitiveIterator it;
-		DataModel dataModel = this.getDataModel();
-		it = dataModel.getUserIDs();
-		while (it.hasNext()) {
-			long userID = it.nextLong();
-			int g = this.Rho.get(userID).get();
-			kCnts.set(g, kCnts.get(g) + 1);
-		}
-		it = dataModel.getItemIDs();
-		while (it.hasNext()) {
-			long itemID = it.nextLong();
-			int h = this.Gamma.get(itemID).get();
-			lCnts.set(h, lCnts.get(h) + 1);
-		}
-
-		int n = dataModel.getNumUsers();
-		int m = dataModel.getNumItems();
-
-		String s = String.format("%n");
-//		for (int i = 0; i < this.k; i++) {
-//			for (int j = 0; j < this.l; j++) {
-//				int cnt = trainingErr.getCount(i, j);
-//				double sparsity = 1 - (double) (cnt) / (double) (kCnts.get(i) * lCnts.get(j));
-//				double coverage = (double) (kCnts.get(i) * lCnts.get(j)) / (double) (n * m);
-//				s += String.format(
-//						"Bicluster %d:%d, testing RMSE is %g, training RMSE is %g, number of training cells is %d, sparsity is %g, coverage is %g, true mean is %g, true stdev is %g%n",
-//						i, j, testingErr.getRMSE(i, j), trainingErr.getRMSE(i, j), cnt, sparsity, coverage,
-//						biStats.getMean(i, j), biStats.getStd(i, j));
-//			}
-//		}
-		for (int i = 0; i < this.k; i++) {
-			int cnt = trainingErr.getCount(i, -1);
-			double sparsity = 1 - (double) (cnt) / (double) (kCnts.get(i) * m);
-			s += String.format("Bicluster %d:-, testing RMSE is %g, training RMSE is %g, sparsity is %g%n", i,
-					testingErr.getRMSE(i, -1), trainingErr.getRMSE(i, -1), sparsity);
-		}
-		for (int j = 0; j < this.l; j++) {
-			int cnt = trainingErr.getCount(-1, j);
-			double sparsity = 1 - (double) (cnt) / (double) (n * lCnts.get(j));
-			s += String.format("Bicluster -:%d, testing RMSE is %g, training RMSE is %g, sparsity is %g%n", j,
-					testingErr.getRMSE(-1, j), trainingErr.getRMSE(-1, j), sparsity);
-		}
-		return s;
 	}
 
 	private final class Estimator implements TopItems.Estimator<Long> {
@@ -589,142 +564,6 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 		void set(int n) {
 			this.idx = n;
 		}
-	}
-
-	private class BiclusterStatistics {
-
-		private final List<List<FullRunningAverageAndStdDev>> stats;
-		private final int k;
-		private final int l;
-
-		BiclusterStatistics(int k, int l) {
-			this.k = k;
-			this.l = l;
-			this.stats = new ArrayList<List<FullRunningAverageAndStdDev>>(this.k);
-			for (int i = 0; i < this.k; i++) {
-				List<FullRunningAverageAndStdDev> list = new ArrayList<FullRunningAverageAndStdDev>(this.l);
-				for (int j = 0; j < this.l; j++) {
-					list.add(new FullRunningAverageAndStdDev());
-				}
-				this.stats.add(list);
-			}
-		}
-
-		void add(float v, int i, int j) {
-			this.stats.get(i).get(j).addDatum(v);
-		}
-
-		double getMean(int i, int j) {
-			return this.stats.get(i).get(j).getAverage();
-		}
-
-		double getStd(int i, int j) {
-			return this.stats.get(i).get(j).getStandardDeviation();
-		}
-
-	}
-
-	private class PredictionError {
-
-		private final List<List<Float>> kerrors;
-		private final List<List<Float>> lerrors;
-		private final int k;
-		private final int l;
-
-		PredictionError(int k, int l) {
-			this.k = k;
-			this.l = l;
-			this.kerrors = new ArrayList<List<Float>>(this.k);
-			this.lerrors = new ArrayList<List<Float>>(this.l);
-			for (int i = 0; i < this.k; i++) {
-				kerrors.add(new ArrayList<Float>());
-			}
-			for (int j = 0; j < this.l; j++) {
-				lerrors.add(new ArrayList<Float>());
-			}
-		}
-
-		void add(float err, int i, int j) {
-			float x = err * err;
-			this.kerrors.get(i).add(x);
-			this.lerrors.get(j).add(x);
-		}
-
-		int getCount(int i, int j) {
-			if (j < 0) {
-				return this.kerrors.get(i).size();
-			} else if (i < 0) {
-				return this.lerrors.get(j).size();
-			} else {
-				return 0;
-			}
-		}
-
-		double getRMSE(int i, int j) {
-			if (j < 0) {
-				Average avg = new Average();
-				for (float x : this.kerrors.get(i)) {
-					avg.add(x);
-				}
-				return Math.sqrt(avg.compute());
-			} else if (i < 0) {
-				Average avg = new Average();
-				for (float x : this.lerrors.get(j)) {
-					avg.add(x);
-				}
-				return Math.sqrt(avg.compute());
-			} else {
-				return Double.NaN;
-			}
-		}
-
-//		boolean passAndersonDarlingTest(int i, int j) {
-//			List<Float> values = this.errors.get(i).get(j);
-//			int n = values.size();
-//			if (n < 2) {
-//				return true;
-//			}
-//			double mean = 0;
-//			for (float x : values) {
-//				mean += x;
-//			}
-//			mean = mean / (double) (n);
-//			double stdev = 0;
-//			for (float x : values) {
-//				stdev += Math.pow(x - mean, 2);
-//			}
-//			stdev = Math.sqrt(stdev / (double) (n - 1));
-//			double A = 0;
-//			int d = 1;
-//			for (float x : values) {
-//				double y = (x - mean) / stdev;
-//				double z = new NormalDistribution(mean, stdev).cumulativeProbability(y);
-//				A += (2 * d - 1) * Math.log(z) + (2 * (n - d) + 1) * Math.log(1 - z);
-//				d++;
-//			}
-//			A = (-n - A / (double) (n)) * (1 + 4 / (double) (n) - 25 / Math.pow(n, 2));
-//			if (A >= 0.787) {
-//				return false;
-//			} else {
-//				return true;
-//			}
-//		}
-//
-//		double get() {
-//			Average avg = new Average();
-//			for (int i = 0; i < this.k; i++) {
-//				for (int j = 0; j < this.l; j++) {
-//					if (this.passAndersonDarlingTest(i, j)) {
-//						avg.add(1);
-//					} else {
-//						avg.add(0);
-//					}
-//
-//				}
-//			}
-//			return avg.compute();
-//		}
-
 	}
 
 }

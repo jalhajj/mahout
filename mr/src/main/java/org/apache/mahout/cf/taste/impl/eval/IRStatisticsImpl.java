@@ -34,9 +34,10 @@ public final class IRStatisticsImpl implements IRStatistics, Serializable {
 	private final double itemCoverage;
 	private final double perPrecision;
 	private final double perRecall;
+	private final double diversity;
 
 	IRStatisticsImpl(double precision, double recall, double fallOut, double ndcg, double reachAtLeastOne,
-			double reachAll, double itemCoverage, double perPrecision, double perRecall) {
+			double reachAll, double itemCoverage, double perPrecision, double perRecall, double diversity) {
 		Preconditions.checkArgument(Double.isNaN(precision) || (precision >= 0.0 && precision <= 1.0),
 				"Illegal precision: " + precision + ". Must be: 0.0 <= precision <= 1.0 or NaN");
 		Preconditions.checkArgument(Double.isNaN(recall) || (recall >= 0.0 && recall <= 1.0),
@@ -55,6 +56,8 @@ public final class IRStatisticsImpl implements IRStatistics, Serializable {
 				"Illegal perPrecision: " + perPrecision + ". Must be: 0.0 <= perPrecision <= 1.0 or NaN");
 		Preconditions.checkArgument(Double.isNaN(perRecall) || (perRecall >= 0.0 && perRecall <= 1.0),
 				"Illegal perRecall: " + perRecall + ". Must be: 0.0 <= perRecall <= 1.0 or NaN");
+		Preconditions.checkArgument(Double.isNaN(diversity) || (diversity >= 0.0),
+				"Illegal diversity: " + diversity + ". Must be: 0.0 <= diversity or NaN");
 		this.precision = precision;
 		this.recall = recall;
 		this.fallOut = fallOut;
@@ -64,10 +67,11 @@ public final class IRStatisticsImpl implements IRStatistics, Serializable {
 		this.itemCoverage = itemCoverage;
 		this.perPrecision = perPrecision;
 		this.perRecall = perRecall;
+		this.diversity = diversity;
 	}
 
 	IRStatisticsImpl(double precision, double recall, double fallOut, double ndcg, double reach) {
-		this(precision, recall, fallOut, ndcg, reach, Double.NaN, Double.NaN, Double.NaN, Double.NaN);
+		this(precision, recall, fallOut, ndcg, reach, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN);
 	}
 
 	@Override
@@ -131,6 +135,11 @@ public final class IRStatisticsImpl implements IRStatistics, Serializable {
 	public String toString() {
 		return "IRStatisticsImpl[precision:" + precision + ",recall:" + recall + ",fallOut:" + fallOut + ",nDCG:" + ndcg
 				+ ",reachAtLeastOne:" + reachAtLeastOne + ",reachAll:" + reachAll + ']';
+	}
+
+	@Override
+	public double getDiversity() {
+		return this.diversity;
 	}
 
 }
