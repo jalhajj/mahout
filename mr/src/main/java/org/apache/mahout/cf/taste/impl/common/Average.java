@@ -30,6 +30,10 @@ public class Average {
 	public int getCount() {
 		return this.cnt;
 	}
+	
+	public float getSum() {
+		return this.sum;
+	}
 
 	public float compute() {
 		if (!this.valValid) {

@@ -20,6 +20,7 @@ import org.apache.mahout.cf.taste.impl.common.FastIDSet;
 import org.apache.mahout.cf.taste.impl.common.FullRunningAverageAndStdDev;
 import org.apache.mahout.cf.taste.impl.common.LongPrimitiveIterator;
 import org.apache.mahout.cf.taste.impl.common.RefreshHelper;
+import org.apache.mahout.cf.taste.impl.common.RunningAverageAndStdDev;
 import org.apache.mahout.cf.taste.impl.model.GenericDataModel;
 import org.apache.mahout.cf.taste.impl.model.GenericPreference;
 import org.apache.mahout.cf.taste.impl.model.GenericUserPreferenceArray;
@@ -367,27 +368,25 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 				float min = Float.MAX_VALUE;
 				for (int g = 0; g < this.k; g++) {
 					float candidate = 0;
+					
+					Maximum reg = new Maximum();
+					
 					PreferenceArray prefs = dataModel.getPreferencesFromUser(userID);
 					for (Preference preference : prefs) {
 						long itemID = preference.getItemID();
 						float rating = preference.getValue();
 						int h = this.Gamma.get(itemID).get();
-						float x = rating - this.ACOC.get(g).get(h).compute() - this.AR.get(userID).compute()
-								+ this.ARC.get(g).compute() - this.AC.get(itemID).compute() + this.ACC.get(h).compute();
+						float prediction = this.ACOC.get(g).get(h).compute() + this.AR.get(userID).compute()
+								- this.ARC.get(g).compute() + this.AC.get(itemID).compute() - this.ACC.get(h).compute();
+						float x = rating - prediction;
 						candidate += x * x;
+						
+						reg.update(prediction);
+						
 					}
 					
 					if (this.lambda != NO_REGULARIZATION) {
-						double max = Double.MIN_VALUE;
-						for (int h = 0; h < this.l; h++) {
-							double x = this.ACOC.get(g).get(h).getCount();
-							if (x >= max) {
-								max = x;
-							}
-						}
-						if (max > Double.MIN_VALUE) {
-							candidate += this.lambda * max;
-						}
+						candidate += this.lambda * reg.get();
 					}
 					
 					if (prefs.length() != 0 && candidate <= min) {
@@ -411,27 +410,25 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 				float min = Float.MAX_VALUE;
 				for (int h = 0; h < this.l; h++) {
 					float candidate = 0;
+					
+					Maximum reg = new Maximum();
+					
 					PreferenceArray prefs = dataModel.getPreferencesForItem(itemID);
 					for (Preference preference : prefs) {
 						long userID = preference.getUserID();
 						float rating = preference.getValue();
 						int g = this.Rho.get(userID).get();
-						float x = rating - this.ACOC.get(g).get(h).compute() - this.AR.get(userID).compute()
-								+ this.ARC.get(g).compute() - this.AC.get(itemID).compute() + this.ACC.get(h).compute();
+						float prediction = this.ACOC.get(g).get(h).compute() + this.AR.get(userID).compute()
+								- this.ARC.get(g).compute() + this.AC.get(itemID).compute() - this.ACC.get(h).compute();
+						float x = rating - prediction;
 						candidate += x * x;
+						
+						reg.update(prediction);
+						
 					}
 					
 					if (this.lambda != NO_REGULARIZATION) {
-						double max = Double.MIN_VALUE;
-						for (int g = 0; g < this.k; g++) {
-							double x = this.ACOC.get(g).get(h).getCount();
-							if (x >= max) {
-								max = x;
-							}
-						}
-						if (max > Double.MIN_VALUE) {
-							candidate += this.lambda * max;
-						}
+						candidate += this.lambda * reg.get();
 					}
 					
 					if (prefs.length() != 0 && candidate <= min) {
@@ -526,6 +523,31 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 		return Math.sqrt(sum / (double) cnt);
 
 	}
+	
+	public double getTrainingError(long userID, long itemID) throws TasteException {
+
+		int cnt = 1;
+	
+		DataModel dataModel = getDataModel();
+		int h = -1;
+		try {
+			h = this.Gamma.get(itemID).get();
+		} catch (NullPointerException ex) {
+			return 1;
+		}
+		PreferenceArray prefs = dataModel.getPreferencesFromUser(userID);
+		if (prefs != null) {
+			for (Preference pref : prefs) {
+				long otherItemID = pref.getItemID();
+				int hh = this.Gamma.get(otherItemID).get();
+				if (h == hh) {
+					cnt++;
+				}
+			}
+		}
+		return cnt * cnt;
+
+	}
 
 	private final class Estimator implements TopItems.Estimator<Long> {
 
@@ -564,6 +586,26 @@ public final class COCLUSTRecommender extends AbstractRecommender {
 		void set(int n) {
 			this.idx = n;
 		}
+	}
+	
+	private class Maximum {
+		
+		private double max;
+		
+		Maximum() {
+			this.max = Double.MIN_VALUE;
+		}
+		
+		void update(double x) {
+			if (x >= this.max) {
+				this.max = x;
+			}
+		}
+		
+		double get() {
+			return this.max;
+		}
+		
 	}
 
 }
