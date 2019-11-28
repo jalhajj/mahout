@@ -159,7 +159,7 @@ public final class KFoldRecommenderPerUserEvaluator {
 				// Precision
 				double p = 0;
 				if (numRecommendedItems > 0) {
-					p = (double) intersectionSize / (double) Math.min(numRecommendedItems, at);
+					p = (double) intersectionSize / (double) at;
 					p = p > 1 ? 1 : p;
 					if (!precision.containsKey(userID)) {
 						precision.put(userID, new FullRunningAverage());

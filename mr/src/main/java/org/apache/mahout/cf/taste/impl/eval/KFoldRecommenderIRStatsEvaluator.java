@@ -179,7 +179,7 @@ public final class KFoldRecommenderIRStatsEvaluator {
 				// Precision
 				double p = 0;
 				if (numRecommendedItems > 0) {
-					p = (double) intersectionSize / (double) Math.min(numRecommendedItems, at);
+					p = (double) intersectionSize / (double) at;
 					p = p > 1 ? 1 : p;
 					precisionFold.addDatum(p);
 				}
