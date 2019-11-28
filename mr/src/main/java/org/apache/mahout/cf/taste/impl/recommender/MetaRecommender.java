@@ -2,7 +2,9 @@ package org.apache.mahout.cf.taste.impl.recommender;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.mahout.cf.taste.common.Refreshable;
 import org.apache.mahout.cf.taste.common.TasteException;
@@ -55,6 +57,7 @@ public class MetaRecommender extends AbstractRecommender {
 	public List<RecommendedItem> recommend(long userID, int howMany, IDRescorer rescorer, boolean includeKnownItems)
 			throws TasteException {
 		List<RecommendedItem> recommendations = new ArrayList<RecommendedItem>();
+		Set<Long> ids = new HashSet<Long>();
 		for (RecWrapper rw : this.recs) {
 			List<RecommendedItem> l = rw.getRecommender().recommend(userID, howMany, rescorer, includeKnownItems);
 			int cnt = (int) (rw.getWeight() * (float) howMany);
@@ -63,7 +66,10 @@ public class MetaRecommender extends AbstractRecommender {
 				if (k >= cnt) {
 					break;
 				} else {
-					recommendations.add(item);
+					if (!ids.contains(item.getItemID())) {
+						recommendations.add(item);
+						ids.add(item.getItemID());
+					}
 					k++;
 				}
 			}
