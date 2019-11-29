@@ -1,6 +1,8 @@
 package org.apache.mahout.cf.taste.impl.eval;
 
 import java.util.Iterator;
+import java.util.Random;
+
 import org.apache.mahout.cf.taste.common.NoSuchItemException;
 import org.apache.mahout.cf.taste.common.NoSuchUserException;
 import org.apache.mahout.cf.taste.common.TasteException;
@@ -28,12 +30,12 @@ public final class KFoldRecommenderPredictionEvaluator {
 	private final DataModel dataModel;
 	private final FoldDataSplitter folds;
 
-	public KFoldRecommenderPredictionEvaluator(DataModel dataModel, int nbFolds) throws TasteException {
+	public KFoldRecommenderPredictionEvaluator(DataModel dataModel, int nbFolds, Random random) throws TasteException {
 		Preconditions.checkArgument(dataModel != null, "dataModel is null");
 		Preconditions.checkArgument(nbFolds > 1, "nbFolds must be > 1");
 
 		this.dataModel = dataModel;
-		this.folds = new KFoldDataSplitter(this.dataModel, nbFolds);
+		this.folds = new KFoldDataSplitter(this.dataModel, nbFolds, random);
 	}
 
 	public KFoldRecommenderPredictionEvaluator(DataModel dataModel, FoldDataSplitter splitter) throws TasteException {

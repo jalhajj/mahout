@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Iterator;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
@@ -38,15 +39,25 @@ public abstract class AbstractKFoldRecommenderEvaluator {
 	public double noEstimateCounterAverage = 0.0;
 	public double totalEstimateCount = 0.0;
 	public double totalEstimateCountAverage = 0.0;
+	
+	private static long SEED = 17658295L;
 
 	private static final Logger log = LoggerFactory.getLogger(AbstractKFoldRecommenderEvaluator.class);
-
+	
 	public AbstractKFoldRecommenderEvaluator(DataModel dataModel, int nbFolds) throws TasteException {
 		Preconditions.checkArgument(dataModel != null, "dataModel is null");
 		Preconditions.checkArgument(nbFolds > 1, "nbFolds must be > 1");
 
 		this.dataModel = dataModel;
-		this.folds = new KFoldDataSplitter(dataModel, nbFolds);
+		this.folds = new KFoldDataSplitter(dataModel, nbFolds, new Random(SEED));
+	}
+
+	public AbstractKFoldRecommenderEvaluator(DataModel dataModel, int nbFolds, Random random) throws TasteException {
+		Preconditions.checkArgument(dataModel != null, "dataModel is null");
+		Preconditions.checkArgument(nbFolds > 1, "nbFolds must be > 1");
+
+		this.dataModel = dataModel;
+		this.folds = new KFoldDataSplitter(dataModel, nbFolds, random);
 	}
 	
 	public AbstractKFoldRecommenderEvaluator(DataModel dataModel, FoldDataSplitter splitter) throws TasteException {

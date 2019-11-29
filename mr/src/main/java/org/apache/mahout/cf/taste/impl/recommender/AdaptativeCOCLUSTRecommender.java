@@ -29,18 +29,21 @@ public final class AdaptativeCOCLUSTRecommender extends AbstractRecommender {
 	
 	private Recommender curRec;
 	private final int nbMaxIterations;
+	private final Random random;
 	private static final Logger log = LoggerFactory.getLogger(AdaptativeCOCLUSTRecommender.class);
 
-	public AdaptativeCOCLUSTRecommender(DataModel dataModel, int maxIter, CandidateItemsStrategy strategy)
+	public AdaptativeCOCLUSTRecommender(DataModel dataModel, int maxIter, CandidateItemsStrategy strategy, Random random)
 			throws TasteException {
 		super(dataModel, strategy);
 		this.nbMaxIterations = maxIter;
+		this.random = random;
 		init();
 	}
 
-	public AdaptativeCOCLUSTRecommender(DataModel dataModel, int maxIter) throws TasteException {
+	public AdaptativeCOCLUSTRecommender(DataModel dataModel, int maxIter, Random random) throws TasteException {
 		super(dataModel);
 		this.nbMaxIterations = maxIter;
+		this.random = random;
 		init();
 	}
 
@@ -49,7 +52,7 @@ public final class AdaptativeCOCLUSTRecommender extends AbstractRecommender {
 		Parameters params = new Parameters();
 		
 		DataModel dataModel = this.getDataModel();
-		KFoldRecommenderPredictionEvaluator evaluator = new KFoldRecommenderPredictionEvaluator(dataModel, 5);
+		KFoldRecommenderPredictionEvaluator evaluator = new KFoldRecommenderPredictionEvaluator(dataModel, 5, this.random);
 
 		RecommenderBuilder builder = new COCLUSTBuilder(params.getK(), params.getL(), this.nbMaxIterations);
 		double rmse = evaluator.evaluate(builder).getRMSE();

@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 import org.apache.mahout.cf.taste.common.TasteException;
 import org.apache.mahout.cf.taste.eval.FoldDataSplitter;
@@ -22,13 +23,15 @@ import com.google.common.collect.Lists;
 final public class KFoldDataSplitter implements FoldDataSplitter {
 
 	private final List<Fold> folds;
+	private final Random random;
 
-	public KFoldDataSplitter(DataModel dataModel, int nbFolds) throws TasteException {
+	public KFoldDataSplitter(DataModel dataModel, int nbFolds, Random random) throws TasteException {
 		Preconditions.checkArgument(dataModel != null, "dataModel is null");
 		Preconditions.checkArgument(nbFolds > 1, "nbFolds must be > 1");
 
 		this.folds = new ArrayList<Fold>(nbFolds);
-
+		this.random = random;
+		
 		int numUsers = dataModel.getNumUsers();
 
 		// Initialize buckets for the number of folds
@@ -104,7 +107,7 @@ final public class KFoldDataSplitter implements FoldDataSplitter {
 		}
 
 		// Shuffle the items
-		Collections.shuffle(userPrefs);
+		Collections.shuffle(userPrefs, this.random);
 
 		int currentBucket = 0;
 		for (int i = 0; i < size; i++) {
