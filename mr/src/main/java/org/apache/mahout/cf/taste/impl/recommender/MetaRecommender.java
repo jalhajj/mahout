@@ -18,10 +18,12 @@ public class MetaRecommender extends AbstractRecommender {
 		
 		private final Recommender rec;
 		private double weight;
+		private String name;
 		
-		public RecWrapper(Recommender rec, double weight) {
+		public RecWrapper(Recommender rec, double weight, String name) {
 			this.rec = rec;
 			this.weight = weight;
+			this.name = name;
 		}
 		
 		public Recommender getRecommender() {
@@ -34,6 +36,10 @@ public class MetaRecommender extends AbstractRecommender {
 		
 		public void setWeight(double weight) {
 			this.weight = weight;
+		}
+		
+		public String getName() {
+			return this.name;
 		}
 		
 	}
@@ -73,6 +79,26 @@ public class MetaRecommender extends AbstractRecommender {
 			}
 		}
 		return recommendations;
+	}
+	
+	public List<List<RecommendedItem>> recommendSeperately(long userID, int howMany, IDRescorer rescorer, boolean includeKnownItems)
+			throws TasteException {
+		List<List<RecommendedItem>> recommendations = new ArrayList<List<RecommendedItem>>();
+		for (RecWrapper rw : this.recs) {
+			int cnt = (int) (rw.getWeight() * (float) howMany);
+			List<RecommendedItem> l = rw.getRecommender().recommend(userID, cnt, rescorer, includeKnownItems);
+			recommendations.add(l);
+		}
+		return recommendations;
+	}
+	
+	public String getRecNames() {
+		StringBuilder builder = new StringBuilder();
+		for (RecWrapper rw : this.recs) {
+			builder.append(rw.getName());
+			builder.append(",");
+		}
+		return builder.toString();
 	}
 
 	@Override

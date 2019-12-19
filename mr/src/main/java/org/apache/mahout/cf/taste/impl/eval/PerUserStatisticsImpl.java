@@ -1,5 +1,7 @@
 package org.apache.mahout.cf.taste.impl.eval;
 
+import java.util.List;
+
 import org.apache.mahout.cf.taste.eval.PerUserStatistics;
 import org.apache.mahout.cf.taste.impl.common.FastByIDMap;
 import org.apache.mahout.cf.taste.impl.common.FastIDSet;
@@ -12,6 +14,7 @@ public class PerUserStatisticsImpl implements PerUserStatistics {
 	private final FastByIDMap<Double> precision;
 	private final FastByIDMap<Double> recall;
 	private final FastByIDMap<Double> ndcg;
+	private final FastByIDMap<List<Double>> hitsFrom;
 	private final FastIDSet userIDs;
 
 	public PerUserStatisticsImpl(int numUsers) {
@@ -20,6 +23,7 @@ public class PerUserStatisticsImpl implements PerUserStatistics {
 		this.precision = new FastByIDMap<Double>(numUsers);
 		this.recall = new FastByIDMap<Double>(numUsers);
 		this.ndcg = new FastByIDMap<Double>(numUsers);
+		this.hitsFrom = new FastByIDMap<List<Double>>(numUsers);
 		this.userIDs = new FastIDSet(numUsers);
 	}
 
@@ -96,6 +100,16 @@ public class PerUserStatisticsImpl implements PerUserStatistics {
 	public void addNDCG(long userID, double ndcg) {
 		this.ndcg.put(userID, ndcg);
 		this.userIDs.add(userID);
+	}
+
+	@Override
+	public List<Double> getHitsFrom(long userID) {
+		return this.hitsFrom.get(userID);
+	}
+
+	@Override
+	public void addHitsFrom(long userID, List<Double> l) {
+		this.hitsFrom.put(userID, l);
 	}
 
 }
