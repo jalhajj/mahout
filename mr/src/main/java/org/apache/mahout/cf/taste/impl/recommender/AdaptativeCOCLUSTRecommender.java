@@ -104,6 +104,11 @@ public final class AdaptativeCOCLUSTRecommender extends AbstractRecommender {
 		public Recommender buildRecommender(DataModel dataModel, Fold fold) throws TasteException {
 			return this.buildRecommender(dataModel);
 		}
+
+		@Override
+		public Recommender buildRecommender(DataModel dataModel, CandidateItemsStrategy s) throws TasteException {
+			return new COCLUSTRecommender(dataModel, this.k, this.l, this.ni, s);
+		}
 	}
 
 
