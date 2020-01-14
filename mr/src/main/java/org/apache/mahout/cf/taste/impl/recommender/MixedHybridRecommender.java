@@ -13,9 +13,7 @@ import org.apache.mahout.cf.taste.common.TasteException;
 import org.apache.mahout.cf.taste.eval.RecommenderBuilder;
 import org.apache.mahout.cf.taste.impl.common.FastByIDMap;
 import org.apache.mahout.cf.taste.impl.common.FastIDSet;
-import org.apache.mahout.cf.taste.impl.common.FullRunningAverage;
 import org.apache.mahout.cf.taste.impl.common.LongPrimitiveIterator;
-import org.apache.mahout.cf.taste.impl.common.RunningAverage;
 import org.apache.mahout.cf.taste.impl.eval.Fold;
 import org.apache.mahout.cf.taste.impl.eval.KFoldDataSplitter;
 import org.apache.mahout.cf.taste.impl.recommender.MetaRecommender.RecWrapper;
@@ -25,8 +23,12 @@ import org.apache.mahout.cf.taste.recommender.CandidateItemsStrategy;
 import org.apache.mahout.cf.taste.recommender.IDRescorer;
 import org.apache.mahout.cf.taste.recommender.RecommendedItem;
 import org.apache.mahout.cf.taste.recommender.Recommender;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class MixedHybridRecommender extends AbstractRecommender {
+	
+	private static final Logger log = LoggerFactory.getLogger(MixedHybridRecommender.class);
 
 	static class UserBlender {
 		
@@ -164,30 +166,45 @@ public class MixedHybridRecommender extends AbstractRecommender {
 	@Override
 	public List<RecommendedItem> recommend(long userID, int howMany, IDRescorer rescorer, boolean includeKnownItems)
 			throws TasteException {
-		boolean uniform = false;
-		UserBlender blender = this.userBlenders.get(userID);
-		if (blender == null) {
-			uniform = true;
-		}
+		
 		List<RecommendedItem> recommendations = new ArrayList<RecommendedItem>();
 		List<Long> ids = new ArrayList<Long>();
-		int idx = 0;
-		int cnt = blender.getCount();
-		if (cnt == 0) {
+		
+		boolean uniform = false;
+		UserBlender blender = this.userBlenders.get(userID);
+		if (blender == null || blender.getCount() == 0) {
 			// No hit for all algorithms in validation set, so uniform combination
 			uniform = true;
 		}
-		for (Recommender rec : this.recs) {
-			List<RecommendedItem> l = rec.recommend(userID, howMany, rescorer, includeKnownItems);
+		
+		List<Integer> howManies = new ArrayList<Integer>(this.nrecs);
+		int idMax = 0, max = -1, sum = 0;
+		for (int idx = 0; idx < this.nrecs; idx++) {
 			int howRealMany = 0;
 			if (uniform) {
+				log.warn("No blender for user {}, using uniform combination", userID);
 				howRealMany = (int) ((float) howMany / (float) this.nrecs);
 			} else {
-				howRealMany = (int) ((float) blender.getNbHits(idx) / (float) cnt * (float) howMany);
+				howRealMany = (int) ((float) blender.getNbHits(idx) / (float) blender.getCount() * (float) howMany);
 			}
+			howManies.add(howRealMany);
+			if (howRealMany > max) {
+				max = howRealMany;
+				idMax = idx;
+			}
+			sum += howRealMany;
+		}
+		if (sum < howMany) {
+			howManies.set(idMax, max + howMany - sum);
+		}
+//		log.info("User {} : {} items from recs", userID, howManies);
+		
+		int idx = 0;
+		for (Recommender rec : this.recs) {
+			List<RecommendedItem> l = rec.recommend(userID, howMany, rescorer, includeKnownItems);
 			int k = 0;
 			for (RecommendedItem item : l) {
-				if (k >= howRealMany) {
+				if (k >= howManies.get(idx)) {
 					break;
 				} else {
 					if (!ids.contains(item.getItemID())) {
