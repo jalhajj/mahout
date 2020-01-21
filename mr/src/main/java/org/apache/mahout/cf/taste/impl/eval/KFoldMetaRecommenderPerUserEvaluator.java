@@ -1,9 +1,13 @@
 package org.apache.mahout.cf.taste.impl.eval;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 
 import org.apache.mahout.cf.taste.common.NoSuchItemException;
 import org.apache.mahout.cf.taste.common.NoSuchUserException;
@@ -62,7 +66,10 @@ public final class KFoldMetaRecommenderPerUserEvaluator {
 		FastByIDMap<ArrayList<RunningAverage>> hitsFrom = new FastByIDMap<ArrayList<RunningAverage>>(n);
 		
 		Iterator<Fold> itF = this.folds.getFolds();
+		int foldID = 0;
 		while (itF.hasNext()) {
+			
+			log.info("Fold #{}", foldID);
 
 			Fold fold = itF.next();
 
@@ -80,6 +87,11 @@ public final class KFoldMetaRecommenderPerUserEvaluator {
 			while (it.hasNext()) {
 
 				long userID = it.nextLong();
+				
+				if (userID != 6) {
+					continue;
+				}
+				
 				PreferenceArray prefs = testPrefs.get(userID);
 				if (prefs == null || prefs.length() == 0) {
 					log.debug("Ignoring user {}", userID);
@@ -125,19 +137,53 @@ public final class KFoldMetaRecommenderPerUserEvaluator {
 					hitsFrom.put(userID, l);
 				}
 				
+				FastByIDMap<Integer> occurences = new FastByIDMap<Integer>();
+				Set<Long> hits = new HashSet<Long>();
+				
 				int index = 0;
 				for (List<RecommendedItem> recommendedList : recommendedLists) {
+					
+					List<HitStats> stats = new ArrayList<HitStats>();
+					
 					int thisIntersection = 0;
+					int rank = 0;
 					for (RecommendedItem recommendedItem : recommendedList) {
-						if (relevantItemIDs.contains(recommendedItem.getItemID())) {
+						long itemID = recommendedItem.getItemID();
+						if (relevantItemIDs.contains(itemID)) {
 							intersectionSize++;
 							thisIntersection++;
+							stats.add(new HitStats(itemID, rank));
+							hits.add(itemID);
 						}
+						
+						if (!occurences.containsKey(itemID)) {
+							occurences.put(itemID, 1);
+						} else {
+							occurences.put(itemID, occurences.get(itemID) + 1);
+						}
+
+						rank++;
 						numRecommendedItems++;
 					}
 					hitsFrom.get(userID).get(index).addDatum(thisIntersection);
+					
+					log.info("Rec items for user {} from rec {}: {}", userID, index, stats);
+					
 					index++;
 				}
+				
+				log.info("Hit items for user {}: {}", userID, hits);
+				
+				List<HitStats> hstats = new ArrayList<HitStats>(occurences.size());
+				LongPrimitiveIterator hiterator = occurences.keySetIterator();
+				while (hiterator.hasNext()) {
+					long itemID = hiterator.nextLong();
+					int occ = occurences.get(itemID);
+					hstats.add(new HitStats(itemID, occ));
+				}
+				Collections.sort(hstats, new HitStatsComparator());
+				log.info("Sorted occ items for user {}: {}", userID, hstats);
+				log.info("");
 
 				// Precision
 				double p = 0;
@@ -151,6 +197,8 @@ public final class KFoldMetaRecommenderPerUserEvaluator {
 				}
 
 			}
+			
+			foldID++;
 
 		}
 
@@ -174,6 +222,36 @@ public final class KFoldMetaRecommenderPerUserEvaluator {
 		}
 		
 		return results;
+	}
+	
+	class HitStats {
+		
+		private final long itemID;
+		private final int count;
+		
+		HitStats(long itemID, int count) {
+			this.itemID = itemID;
+			this.count = count;
+		}
+		
+		public String toString() {
+			return String.format("%d (%d)", this.itemID, this.count);
+		}
+		
+	}
+	
+	class HitStatsComparator implements Comparator<HitStats> {
+
+		@Override
+		public int compare(HitStats h1, HitStats h2) {
+			int x = - Integer.compare(h1.count, h2.count);
+			if (x == 0) {
+				return Long.compare(h1.itemID, h2.itemID);
+			} else {
+				return x;
+			}
+		}
+		
 	}
 
 }
