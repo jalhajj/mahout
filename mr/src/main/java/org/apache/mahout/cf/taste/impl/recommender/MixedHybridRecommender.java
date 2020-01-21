@@ -120,7 +120,7 @@ public class MixedHybridRecommender extends AbstractRecommender {
 	
 	private void trainBlenders() throws TasteException {
 		
-		KFoldDataSplitter folds = new KFoldDataSplitter(this.getDataModel(), 2, new Random(this.seed));
+		KFoldDataSplitter folds = new KFoldDataSplitter(this.getDataModel(), 5, new Random(this.seed));
 		Iterator<Fold> itF = folds.getFolds();
 		while (itF.hasNext()) {
 
