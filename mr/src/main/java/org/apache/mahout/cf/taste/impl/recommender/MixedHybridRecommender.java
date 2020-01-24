@@ -14,10 +14,8 @@ import org.apache.mahout.cf.taste.eval.RecommenderBuilder;
 import org.apache.mahout.cf.taste.impl.common.FastByIDMap;
 import org.apache.mahout.cf.taste.impl.common.FastIDSet;
 import org.apache.mahout.cf.taste.impl.common.FullRunningAverage;
-import org.apache.mahout.cf.taste.impl.common.FullRunningAverageAndStdDev;
 import org.apache.mahout.cf.taste.impl.common.LongPrimitiveIterator;
 import org.apache.mahout.cf.taste.impl.common.RunningAverage;
-import org.apache.mahout.cf.taste.impl.common.RunningAverageAndStdDev;
 import org.apache.mahout.cf.taste.impl.eval.Fold;
 import org.apache.mahout.cf.taste.impl.eval.KFoldDataSplitter;
 import org.apache.mahout.cf.taste.impl.recommender.MetaRecommender.RecWrapper;
@@ -39,8 +37,6 @@ import org.chocosolver.util.ESat;
 public class MixedHybridRecommender extends AbstractRecommender {
 	
 	private static final Logger log = LoggerFactory.getLogger(MixedHybridRecommender.class);
-	
-	private static final double LOG2 = Math.log(2.0);
 
 	static class UserBlender {
 		
@@ -82,11 +78,12 @@ public class MixedHybridRecommender extends AbstractRecommender {
 	private final long seed;
 	private final double relevanceThreshold;
 	private final int at;
+	private final int nbFolds;
 	
 	private final Random rand;
 	private ArrayList<Integer> stats;
 	
-	public MixedHybridRecommender(DataModel dataModel, ArrayList<RecommenderBuilder> builders, long seed, double relevanceThreshold, int at) throws TasteException {
+	public MixedHybridRecommender(DataModel dataModel, ArrayList<RecommenderBuilder> builders, long seed, double relevanceThreshold, int at, int nbFolds) throws TasteException {
 		super(dataModel);
 		this.builders = builders;
 		this.recs = new ArrayList<Recommender>(builders.size());
@@ -98,11 +95,12 @@ public class MixedHybridRecommender extends AbstractRecommender {
 		this.seed = seed;
 		this.relevanceThreshold = relevanceThreshold;
 		this.at = at;
+		this.nbFolds = nbFolds;
 		this.rand = new Random(seed);
 		trainBlenders();
 	}
 	
-	public MixedHybridRecommender(DataModel dataModel, ArrayList<RecommenderBuilder> builders, long seed, double relevanceThreshold, int at, CandidateItemsStrategy strategy) throws TasteException {
+	public MixedHybridRecommender(DataModel dataModel, ArrayList<RecommenderBuilder> builders, long seed, double relevanceThreshold, int at, int nbFolds, CandidateItemsStrategy strategy) throws TasteException {
 		super(dataModel, strategy);
 		this.builders = builders;
 		this.recs = new ArrayList<Recommender>(builders.size());
@@ -114,13 +112,14 @@ public class MixedHybridRecommender extends AbstractRecommender {
 		this.seed = seed;
 		this.relevanceThreshold = relevanceThreshold;
 		this.at = at;
+		this.nbFolds = nbFolds;
 		this.rand = new Random(seed);
 		trainBlenders();
 	}
 	
 	private void trainBlenders() throws TasteException {
 		
-		KFoldDataSplitter folds = new KFoldDataSplitter(this.getDataModel(), 5, new Random(this.seed));
+		KFoldDataSplitter folds = new KFoldDataSplitter(this.getDataModel(), this.nbFolds, new Random(this.seed));
 		Iterator<Fold> itF = folds.getFolds();
 		while (itF.hasNext()) {
 
@@ -156,9 +155,23 @@ public class MixedHybridRecommender extends AbstractRecommender {
 					continue;
 				}
 				
+				// Start to describe opt pb
 				Model model = new Model();
-				BoolVar[][] cutoffs = model.boolVarMatrix("cutoffs", this.nrecs, this.at);
+				BoolVar[][] cutoffs = model.boolVarMatrix("cutoffs", this.nrecs, this.at + 1);
 				IntVar[] allHits = model.intVarArray("allHits", this.nrecs, 0, this.at);
+				IntVar[] allRanks = model.intVarArray("allRanks", this.nrecs, 0, this.at);
+				
+				int[] ranks = new int[this.at + 1];
+			    for (int rank = 0; rank <= this.at; rank++) {
+			    	ranks[rank] = rank;
+			    }
+				
+				// Set total number of recs
+			    for (int index = 0; index < this.nrecs; index++) {
+			    	model.scalar(cutoffs[index], ranks, "=", allRanks[index]).post();
+			    }
+			    model.sum(allRanks, "=", this.at).post();
+				
 
 				FastIDSet relevantItemIDs = new FastIDSet(prefs.length());
 				for (int i = 0; i < prefs.length(); i++) {
@@ -183,13 +196,15 @@ public class MixedHybridRecommender extends AbstractRecommender {
 				
 				for (List<RecommendedItem> recommendedList : recommendedLists) {
 					
-					int[] hits = new int[this.at];
+					int[] hits = new int[this.at + 1];
 					
 					// Constraint of only one cutoff to choose per algo
 					model.sum(cutoffs[index], "=", 1).post();
 					
 					int thisIntersection = 0;
 					int rank = 0;
+					hits[rank] = thisIntersection;
+					rank++;
 					for (RecommendedItem recommendedItem : recommendedList) {
 						if (relevantItemIDs.contains(recommendedItem.getItemID())) {
 							thisIntersection++;
@@ -200,8 +215,8 @@ public class MixedHybridRecommender extends AbstractRecommender {
 					}
 					
 					// Fill to at with last value if not enough values (less recs than asked for)
-					if (rank != this.at) {
-						for (int k = rank; k < this.at; k++) {
+					if (rank != this.at + 1) {
+						for (int k = rank; k <= this.at; k++) {
 							hits[k] = thisIntersection;
 						}
 					}
@@ -221,15 +236,23 @@ public class MixedHybridRecommender extends AbstractRecommender {
 				// Solve
 				if(model.getSolver().solve()) {
 					
+//					for (index = 0; index < this.nrecs; index++) {
+//				    	log.info("=== user {} ===", userID);
+//				    	for (int rank = 0; rank <= this.at; rank++) {
+//				    		log.info("{},{},{}", index, rank, cutoffs[index][rank]);
+//				    	}
+//				    }
+					
 				    for (index = 0; index < this.nrecs; index++) {
 				    	int rank;
-				    	for (rank = 0; rank < this.at; rank++) {
+				    	for (rank = 0; rank <= this.at; rank++) {
 				    		if (cutoffs[index][rank].getBooleanValue() == ESat.eval(true)) {
 				    			break;
 				    		}
 				    	}
 				    	double prop = (double) rank / (double) this.at;
 				    	blender.add(index, prop);
+//				    	log.info("rank {} for rec {}", rank, index);
 				    }
 				    
 				} else {
@@ -295,31 +318,34 @@ public class MixedHybridRecommender extends AbstractRecommender {
 //		}
 		
 		int idx = 0;
+		
+		List<Integer> howManiesReal = new ArrayList<Integer>(this.nrecs);
+		
 //		return this.recs.get(idMax).recommend(userID, howMany, rescorer, includeKnownItems);
 		for (Recommender rec : this.recs) {
 			
-			int start = 0;//Math.max(0, Math.min(howMany - howManies.get(idx), blender.getInfRank(idx)));
-			
 			List<RecommendedItem> l = rec.recommend(userID, howMany, rescorer, includeKnownItems);
+			
+			howManiesReal.add(l.size());
 			
 //			Collections.shuffle(l, this.rand);
 			
 			int k = 0;
 			for (RecommendedItem item : l) {
-				if (k < start) {
-					continue;
-				} else if (k >= howManies.get(idx) + start) {
+				if (k >= howManies.get(idx)) {
 					break;
 				} else {
 					if (!ids.contains(item.getItemID())) {
 						recommendations.add(item);
 						ids.add(item.getItemID());
+						k++;
 					}
-					k++;
 				}
 			}
 			idx++;
 		}
+		assert(recommendations.size() <= howMany);
+//		log.info("Number of recs: {} ({} - {})", recommendations.size(), howManies, howManiesReal);
 		return recommendations;
 	}
 
@@ -330,10 +356,6 @@ public class MixedHybridRecommender extends AbstractRecommender {
 
 	@Override
 	public void refresh(Collection<Refreshable> alreadyRefreshed) {
-	}
-	
-	private static double log2(double value) {
-		return Math.log(value) / LOG2;
 	}
 
 }

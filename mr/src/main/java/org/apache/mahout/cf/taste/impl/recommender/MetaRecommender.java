@@ -57,6 +57,10 @@ public class MetaRecommender extends AbstractRecommender {
 		this.recs = recs;
 	}
 	
+	public int getNbRecs() {
+		return this.recs.size();
+	}
+	
 	@Override
 	public List<RecommendedItem> recommend(long userID, int howMany, IDRescorer rescorer, boolean includeKnownItems)
 			throws TasteException {

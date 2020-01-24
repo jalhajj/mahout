@@ -16,6 +16,8 @@ public class PerUserStatisticsImpl implements PerUserStatistics {
 	private final FastByIDMap<Double> ndcg;
 	private final FastByIDMap<List<Double>> hitsFrom;
 	private final FastIDSet userIDs;
+	
+	private final FastByIDMap<Double> otherStat;
 
 	public PerUserStatisticsImpl(int numUsers) {
 		this.rmse = new FastByIDMap<Double>(numUsers);
@@ -25,6 +27,8 @@ public class PerUserStatisticsImpl implements PerUserStatistics {
 		this.ndcg = new FastByIDMap<Double>(numUsers);
 		this.hitsFrom = new FastByIDMap<List<Double>>(numUsers);
 		this.userIDs = new FastIDSet(numUsers);
+		
+		this.otherStat = new FastByIDMap<Double>(numUsers);
 	}
 
 	@Override
@@ -110,6 +114,20 @@ public class PerUserStatisticsImpl implements PerUserStatistics {
 	@Override
 	public void addHitsFrom(long userID, List<Double> l) {
 		this.hitsFrom.put(userID, l);
+	}
+
+	@Override
+	public double getOther(long userID) {
+		if (!this.otherStat.containsKey(userID)) {
+			return Double.NaN;
+		}
+		return this.otherStat.get(userID);
+	}
+
+	@Override
+	public void addOther(long userID, double other) {
+		this.otherStat.put(userID, other);
+		this.userIDs.add(userID);
 	}
 
 }

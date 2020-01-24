@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
-import org.apache.mahout.cf.taste.common.NoSuchItemException;
 import org.apache.mahout.cf.taste.common.NoSuchUserException;
 import org.apache.mahout.cf.taste.common.TasteException;
 import org.apache.mahout.cf.taste.eval.FoldDataSplitter;
@@ -22,7 +21,6 @@ import org.apache.mahout.cf.taste.impl.common.LongPrimitiveIterator;
 import org.apache.mahout.cf.taste.impl.common.RunningAverage;
 import org.apache.mahout.cf.taste.impl.recommender.MetaRecommender;
 import org.apache.mahout.cf.taste.model.DataModel;
-import org.apache.mahout.cf.taste.model.Preference;
 import org.apache.mahout.cf.taste.model.PreferenceArray;
 import org.apache.mahout.cf.taste.recommender.RecommendedItem;
 import org.apache.mahout.cf.taste.recommender.Recommender;
@@ -30,6 +28,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Preconditions;
+
+import org.chocosolver.solver.Model;
+import org.chocosolver.solver.variables.BoolVar;
+import org.chocosolver.solver.variables.IntVar;
+import org.chocosolver.util.ESat;
 
 public final class KFoldMetaRecommenderPerUserEvaluator {
 
@@ -63,13 +66,14 @@ public final class KFoldMetaRecommenderPerUserEvaluator {
 
 		int n = this.dataModel.getNumUsers();
 		FastByIDMap<RunningAverage> precision = new FastByIDMap<RunningAverage>(n);
+		FastByIDMap<RunningAverage> optPrecision = new FastByIDMap<RunningAverage>(n);
 		FastByIDMap<ArrayList<RunningAverage>> hitsFrom = new FastByIDMap<ArrayList<RunningAverage>>(n);
 		
 		Iterator<Fold> itF = this.folds.getFolds();
 		int foldID = 0;
 		while (itF.hasNext()) {
 			
-			log.info("Fold #{}", foldID);
+			log.debug("Fold #{}", foldID);
 
 			Fold fold = itF.next();
 
@@ -88,10 +92,6 @@ public final class KFoldMetaRecommenderPerUserEvaluator {
 
 				long userID = it.nextLong();
 				
-				if (userID != 6) {
-					continue;
-				}
-				
 				PreferenceArray prefs = testPrefs.get(userID);
 				if (prefs == null || prefs.length() == 0) {
 					log.debug("Ignoring user {}", userID);
@@ -103,6 +103,25 @@ public final class KFoldMetaRecommenderPerUserEvaluator {
 				} catch (NoSuchUserException nsue) {
 					continue;
 				}
+				
+				int nrecs = recommender.getNbRecs();
+				
+				// Start to describe opt pb
+				Model model = new Model();
+				BoolVar[][] cutoffs = model.boolVarMatrix("cutoffs", nrecs, at + 1);
+				IntVar[] allHits = model.intVarArray("allHits", nrecs, 0, at);
+				IntVar[] allRanks = model.intVarArray("allRanks", nrecs, 0, at);
+				
+				int[] ranks = new int[at + 1];
+			    for (int rank = 0; rank <= at; rank++) {
+			    	ranks[rank] = rank;
+			    }
+				
+				// Set total number of recs
+			    for (int index = 0; index < nrecs; index++) {
+			    	model.scalar(cutoffs[index], ranks, "=", allRanks[index]).post();
+			    }
+			    model.sum(allRanks, "=", at).post();
 
 				FastIDSet relevantItemIDs = new FastIDSet(prefs.length());
 				for (int i = 0; i < prefs.length(); i++) {
@@ -142,11 +161,15 @@ public final class KFoldMetaRecommenderPerUserEvaluator {
 				
 				int index = 0;
 				for (List<RecommendedItem> recommendedList : recommendedLists) {
+				
+					int[] phits = new int[at + 1];
 					
 					List<HitStats> stats = new ArrayList<HitStats>();
 					
 					int thisIntersection = 0;
 					int rank = 0;
+					phits[rank] = thisIntersection;
+					rank++;
 					for (RecommendedItem recommendedItem : recommendedList) {
 						long itemID = recommendedItem.getItemID();
 						if (relevantItemIDs.contains(itemID)) {
@@ -162,28 +185,79 @@ public final class KFoldMetaRecommenderPerUserEvaluator {
 							occurences.put(itemID, occurences.get(itemID) + 1);
 						}
 
+						phits[rank] = thisIntersection;
 						rank++;
 						numRecommendedItems++;
 					}
 					hitsFrom.get(userID).get(index).addDatum(thisIntersection);
 					
-					log.info("Rec items for user {} from rec {}: {}", userID, index, stats);
+					// Fill to at with last value if not enough values (less recs than asked for)
+					if (rank != at + 1) {
+						for (int k = rank; k <= at; k++) {
+							phits[k] = thisIntersection;
+						}
+					}
+					
+					// Set hit value for this algo in function of the cutoff variables
+					model.scalar(cutoffs[index], phits, "=", allHits[index]).post();
+					
+					log.debug("Rec items for user {} from rec {}: {}", userID, index, stats);
 					
 					index++;
 				}
 				
-				log.info("Hit items for user {}: {}", userID, hits);
+				// Objective function
+				IntVar OBJ = model.intVar("objective", 0, nrecs * at);
+				model.sum(allHits, "=", OBJ).post();
+				model.setObjective(Model.MAXIMIZE, OBJ);
 				
-				List<HitStats> hstats = new ArrayList<HitStats>(occurences.size());
-				LongPrimitiveIterator hiterator = occurences.keySetIterator();
-				while (hiterator.hasNext()) {
-					long itemID = hiterator.nextLong();
-					int occ = occurences.get(itemID);
-					hstats.add(new HitStats(itemID, occ));
+				double optP = 0;
+				
+				// Solve
+				if(model.getSolver().solve()) {
+					
+					FastIDSet selected = new FastIDSet(at);
+					index = 0;
+					for (List<RecommendedItem> recommendedList : recommendedLists) {
+				    	int rank;
+				    	for (rank = 0; rank <= at; rank++) {
+				    		if (cutoffs[index][rank].getBooleanValue() == ESat.eval(true)) {
+				    			break;
+				    		}
+				    	}
+				    	index++;
+				    	int k = 0;
+				    	for (RecommendedItem recommendedItem : recommendedList) {
+				    		if (k > rank) {
+				    			break;
+				    		}
+				    		selected.add(recommendedItem.getItemID());
+				    		k++;
+				    	}
+				    }
+					
+					int thisIntersection = 0;
+					for (long itemID : selected) {
+						if (relevantItemIDs.contains(itemID)) {
+							thisIntersection++;
+						}
+					}
+					optP = (double) thisIntersection / (double) at;
+				    
 				}
-				Collections.sort(hstats, new HitStatsComparator());
-				log.info("Sorted occ items for user {}: {}", userID, hstats);
-				log.info("");
+				
+				log.debug("Hit items for user {}: {}", userID, hits);
+				
+//				List<HitStats> hstats = new ArrayList<HitStats>(occurences.size());
+//				LongPrimitiveIterator hiterator = occurences.keySetIterator();
+//				while (hiterator.hasNext()) {
+//					long itemID = hiterator.nextLong();
+//					int occ = occurences.get(itemID);
+//					hstats.add(new HitStats(itemID, occ));
+//				}
+//				Collections.sort(hstats, new HitStatsComparator());
+//				log.info("Sorted occ items for user {}: {}", userID, hstats);
+//				log.info("");
 
 				// Precision
 				double p = 0;
@@ -194,6 +268,11 @@ public final class KFoldMetaRecommenderPerUserEvaluator {
 						precision.put(userID, new FullRunningAverage());
 					}
 					precision.get(userID).addDatum(p);
+					
+					if (!optPrecision.containsKey(userID)) {
+						optPrecision.put(userID, new FullRunningAverage());
+					}
+					optPrecision.get(userID).addDatum(optP);
 				}
 
 			}
@@ -209,6 +288,12 @@ public final class KFoldMetaRecommenderPerUserEvaluator {
 		while (it.hasNext()) {
 			long userID = it.nextLong();
 			results.addPrecision(userID, precision.get(userID).getAverage());
+		}
+		
+		it = optPrecision.keySetIterator();
+		while (it.hasNext()) {
+			long userID = it.nextLong();
+			results.addOther(userID, optPrecision.get(userID).getAverage());
 		}
 		
 		it = hitsFrom.keySetIterator();
