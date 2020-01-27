@@ -7,6 +7,7 @@ import java.util.Random;
 import org.apache.mahout.cf.taste.common.NoSuchItemException;
 import org.apache.mahout.cf.taste.common.NoSuchUserException;
 import org.apache.mahout.cf.taste.common.TasteException;
+import org.apache.mahout.cf.taste.eval.ChronologicalDataSplitter;
 import org.apache.mahout.cf.taste.eval.FoldDataSplitter;
 import org.apache.mahout.cf.taste.eval.PerUserStatistics;
 import org.apache.mahout.cf.taste.eval.RecommenderBuilder;
@@ -39,7 +40,8 @@ public final class KFoldRecommenderPerUserEvaluator {
 		Preconditions.checkArgument(nbFolds > 1, "nbFolds must be > 1");
 
 		this.dataModel = dataModel;
-		this.folds = new KFoldDataSplitter(this.dataModel, nbFolds, random);
+//		this.folds = new KFoldDataSplitter(this.dataModel, nbFolds, random);
+		this.folds = new ChronologicalDataSplitter(this.dataModel, (double) nbFolds / 100.0);
 	}
 
 	public KFoldRecommenderPerUserEvaluator(DataModel dataModel, FoldDataSplitter splitter) throws TasteException {

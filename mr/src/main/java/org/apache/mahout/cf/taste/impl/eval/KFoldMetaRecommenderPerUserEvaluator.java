@@ -259,7 +259,7 @@ public final class KFoldMetaRecommenderPerUserEvaluator {
 //				log.info("Sorted occ items for user {}: {}", userID, hstats);
 //				log.info("");
 
-				// Precision
+				// Precision // FIXME computation is wrong, some hits are counted several times!!!
 				double p = 0;
 				if (numRecommendedItems > 0) {
 					p = (double) intersectionSize / (double) at;
