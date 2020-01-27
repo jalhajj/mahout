@@ -25,8 +25,22 @@ public class Fold {
 		
 		this.trainingSet = new GenericDataModel(training);
 		this.testingSet = testing;
-		this.userIDs = new FastIDSet();
 		
+		recordUserIDs();
+	}
+	
+	public Fold(FastByIDMap<PreferenceArray> training, FastByIDMap<FastByIDMap<Long>> trainingTimestamps, FastByIDMap<PreferenceArray> testing) {
+		Preconditions.checkArgument(training != null, "training is null");
+		Preconditions.checkArgument(testing != null, "testing is null");
+		
+		this.trainingSet = new GenericDataModel(training, trainingTimestamps);
+		this.testingSet = testing;
+		
+		recordUserIDs();
+	}
+	
+	private void recordUserIDs() {
+		this.userIDs = new FastIDSet();
 		LongPrimitiveIterator it = this.testingSet.keySetIterator();
 		while (it.hasNext()) {
 			long userID = it.nextLong();

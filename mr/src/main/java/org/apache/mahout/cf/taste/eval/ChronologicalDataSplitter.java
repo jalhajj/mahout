@@ -34,6 +34,10 @@ public class ChronologicalDataSplitter implements FoldDataSplitter {
 		
 		this.folds = new ArrayList<Fold>(1);
 		this.trainingPercentage = trainingPercentage;
+		
+		int n = dataModel.getNumUsers();
+		
+		FastByIDMap<FastByIDMap<Long>> trainingTimestamps = new FastByIDMap<FastByIDMap<Long>>(n);
 
 		FastByIDMap<PreferenceArray> training = new FastByIDMap<PreferenceArray>();
 		FastByIDMap<PreferenceArray> testing = new FastByIDMap<PreferenceArray>();
@@ -42,9 +46,11 @@ public class ChronologicalDataSplitter implements FoldDataSplitter {
 		LongPrimitiveIterator it = dataModel.getUserIDs();
 		while (it.hasNext()) {
 			long userID = it.nextLong();
-			splitOneUsersPrefs(training, testing, userID, dataModel);
+			FastByIDMap<Long> timestamps = new FastByIDMap<Long>();
+			splitOneUsersPrefs(training, timestamps, testing, userID, dataModel);
+			trainingTimestamps.put(userID, timestamps);
 		}
-		this.folds.add(new Fold(training, testing));
+		this.folds.add(new Fold(training, trainingTimestamps, testing));
 		log.info("{} folds", this.folds.size());
 	}
 
@@ -53,7 +59,7 @@ public class ChronologicalDataSplitter implements FoldDataSplitter {
 		return this.folds.iterator();
 	}
 	
-	private void splitOneUsersPrefs(FastByIDMap<PreferenceArray> training, FastByIDMap<PreferenceArray> testing, long userID, DataModel dataModel)
+	private void splitOneUsersPrefs(FastByIDMap<PreferenceArray> training, FastByIDMap<Long> trainingTimestamps, FastByIDMap<PreferenceArray> testing, long userID, DataModel dataModel)
 			throws TasteException {
 
 		PreferenceArray prefs = dataModel.getPreferencesFromUser(userID);
@@ -75,9 +81,11 @@ public class ChronologicalDataSplitter implements FoldDataSplitter {
 
 		int k = 0;
 		for (Preference pref : userPrefs) {
-			Preference newPref = new GenericPreference(userID, pref.getItemID(), pref.getValue());
+			long itemID = pref.getItemID();
+			Preference newPref = new GenericPreference(userID, itemID, pref.getValue());
 			if (k < ntrain) {
 				train.add(newPref);
+				trainingTimestamps.put(itemID, dataModel.getPreferenceTime(userID, itemID));
 			} else {
 				test.add(newPref);
 			}
