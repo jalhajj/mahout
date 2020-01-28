@@ -19,14 +19,14 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Preconditions;
 
-public class ChronologicalDataSplitter implements FoldDataSplitter {
+public class ChronologicalPerUserDataSplitter implements FoldDataSplitter {
 	
-	private static final Logger log = LoggerFactory.getLogger(ChronologicalDataSplitter.class);
+	private static final Logger log = LoggerFactory.getLogger(ChronologicalPerUserDataSplitter.class);
 	
 	private final List<Fold> folds;
 	private final double trainingPercentage;
 	
-	public ChronologicalDataSplitter(DataModel dataModel, double trainingPercentage) throws TasteException {
+	public ChronologicalPerUserDataSplitter(DataModel dataModel, double trainingPercentage) throws TasteException {
 		Preconditions.checkArgument(dataModel != null, "dataModel is null");
 		Preconditions.checkArgument(trainingPercentage > 0 && trainingPercentage < 1, "trainingPercentage must be > 0 and < 1");
 		
@@ -37,30 +37,17 @@ public class ChronologicalDataSplitter implements FoldDataSplitter {
 		
 		int n = dataModel.getNumUsers();
 		
-		List<Long> allTimestamps = new ArrayList<Long>();
-		
-		LongPrimitiveIterator it = dataModel.getUserIDs();
-		while (it.hasNext()) {
-			long userID = it.nextLong();
-			for (Preference pref: dataModel.getPreferencesFromUser(userID)) {
-				long ts = dataModel.getPreferenceTime(userID, pref.getItemID());
-				allTimestamps.add(ts);
-			}
-		}
-		
-		long tsThreshold = getPercentile(allTimestamps, this.trainingPercentage);
-		
 		FastByIDMap<FastByIDMap<Long>> trainingTimestamps = new FastByIDMap<FastByIDMap<Long>>(n);
 
 		FastByIDMap<PreferenceArray> training = new FastByIDMap<PreferenceArray>();
 		FastByIDMap<PreferenceArray> testing = new FastByIDMap<PreferenceArray>();
 
 		// Split the dataModel into K folds per user
-		it = dataModel.getUserIDs();
+		LongPrimitiveIterator it = dataModel.getUserIDs();
 		while (it.hasNext()) {
 			long userID = it.nextLong();
 			FastByIDMap<Long> timestamps = new FastByIDMap<Long>();
-			splitOneUsersPrefs(training, timestamps, testing, userID, dataModel, tsThreshold);
+			splitOneUsersPrefs(training, timestamps, testing, userID, dataModel);
 			trainingTimestamps.put(userID, timestamps);
 		}
 		this.folds.add(new Fold(training, trainingTimestamps, testing));
@@ -72,39 +59,43 @@ public class ChronologicalDataSplitter implements FoldDataSplitter {
 		return this.folds.iterator();
 	}
 	
-	private void splitOneUsersPrefs(FastByIDMap<PreferenceArray> training, FastByIDMap<Long> trainingTimestamps, FastByIDMap<PreferenceArray> testing,
-			long userID, DataModel dataModel, long tsThreshold) throws TasteException {
+	private void splitOneUsersPrefs(FastByIDMap<PreferenceArray> training, FastByIDMap<Long> trainingTimestamps, FastByIDMap<PreferenceArray> testing, long userID, DataModel dataModel)
+			throws TasteException {
 
 		PreferenceArray prefs = dataModel.getPreferencesFromUser(userID);
+		int size = prefs.length();
 
-		List<Preference> train = new ArrayList<Preference>();
-		List<Preference> test = new ArrayList<Preference>();
-		
+		List<Preference> userPrefs = new ArrayList<>();
 		Iterator<Preference> it = prefs.iterator();
 		while (it.hasNext()) {
-			Preference pref = it.next();
+			userPrefs.add(it.next());
+		}
+
+		// Shuffle the items
+		Collections.sort(userPrefs, new ChronologicalPrefComparator(dataModel, userID));
+		
+		int ntrain = (int) (this.trainingPercentage * (float) size);
+		
+		List<Preference> train = new ArrayList<Preference>();
+		List<Preference> test = new ArrayList<Preference>();
+
+		int k = 0;
+		for (Preference pref : userPrefs) {
 			long itemID = pref.getItemID();
 			Preference newPref = new GenericPreference(userID, itemID, pref.getValue());
-			long ts = dataModel.getPreferenceTime(userID, itemID);
-			if (ts <= tsThreshold) {
+			if (k < ntrain) {
 				train.add(newPref);
-				trainingTimestamps.put(itemID, ts);
+				trainingTimestamps.put(itemID, dataModel.getPreferenceTime(userID, itemID));
 			} else {
 				test.add(newPref);
 			}
+			k++;
 		}
 
 		training.put(userID, new GenericUserPreferenceArray(train));
 		testing.put(userID, new GenericUserPreferenceArray(test));
 
 	}
-	
-	private static long getPercentile(List<Long> values, double percentile) {
-        Collections.sort(values);
-        int index = (int) Math.ceil(percentile * (double) values.size());
-        index = Math.max(index, 0);
-        return values.get(index - 1);
-    }
 	
 	class ChronologicalPrefComparator implements Comparator<Preference> {
 		

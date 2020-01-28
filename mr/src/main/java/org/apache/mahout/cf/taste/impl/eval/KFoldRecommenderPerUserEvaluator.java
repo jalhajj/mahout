@@ -8,6 +8,7 @@ import org.apache.mahout.cf.taste.common.NoSuchItemException;
 import org.apache.mahout.cf.taste.common.NoSuchUserException;
 import org.apache.mahout.cf.taste.common.TasteException;
 import org.apache.mahout.cf.taste.eval.ChronologicalDataSplitter;
+import org.apache.mahout.cf.taste.eval.ChronologicalPerUserDataSplitter;
 import org.apache.mahout.cf.taste.eval.FoldDataSplitter;
 import org.apache.mahout.cf.taste.eval.PerUserStatistics;
 import org.apache.mahout.cf.taste.eval.RecommenderBuilder;
