@@ -42,7 +42,7 @@ public final class KFoldRecommenderPerUserEvaluator {
 
 		this.dataModel = dataModel;
 //		this.folds = new KFoldDataSplitter(this.dataModel, nbFolds, random);
-		this.folds = new ChronologicalDataSplitter(this.dataModel, (double) nbFolds / 100.0);
+		this.folds = new ChronologicalPerUserDataSplitter(this.dataModel, (double) nbFolds / 100.0);
 	}
 
 	public KFoldRecommenderPerUserEvaluator(DataModel dataModel, FoldDataSplitter splitter) throws TasteException {
@@ -85,6 +85,7 @@ public final class KFoldRecommenderPerUserEvaluator {
 				int cnt = 0;
 
 				long userID = it.nextLong();
+				
 				PreferenceArray prefs = testPrefs.get(userID);
 				if (prefs == null || prefs.length() == 0) {
 					log.debug("Ignoring user {}", userID);

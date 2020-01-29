@@ -11,6 +11,8 @@ import java.util.Set;
 
 import org.apache.mahout.cf.taste.common.NoSuchUserException;
 import org.apache.mahout.cf.taste.common.TasteException;
+import org.apache.mahout.cf.taste.eval.ChronologicalDataSplitter;
+import org.apache.mahout.cf.taste.eval.ChronologicalPerUserDataSplitter;
 import org.apache.mahout.cf.taste.eval.FoldDataSplitter;
 import org.apache.mahout.cf.taste.eval.PerUserStatistics;
 import org.apache.mahout.cf.taste.eval.RecommenderBuilder;
@@ -46,7 +48,7 @@ public final class KFoldMetaRecommenderPerUserEvaluator {
 		Preconditions.checkArgument(nbFolds > 1, "nbFolds must be > 1");
 
 		this.dataModel = dataModel;
-		this.folds = new KFoldDataSplitter(this.dataModel, nbFolds, random);
+		this.folds = new ChronologicalPerUserDataSplitter(this.dataModel, (double) nbFolds / 100.0);
 	}
 
 	public KFoldMetaRecommenderPerUserEvaluator(DataModel dataModel, FoldDataSplitter splitter) throws TasteException {

@@ -113,7 +113,7 @@ public class MixedHybridRecommender extends AbstractRecommender {
 	
 	private void trainBlenders() throws TasteException {
 		
-		FoldDataSplitter folds = new ChronologicalDataSplitter(this.getDataModel(), (double) this.nbFolds / 100);
+		FoldDataSplitter folds = new ChronologicalPerUserDataSplitter(this.getDataModel(), (double) this.nbFolds / 100);
 		Iterator<Fold> itF = folds.getFolds();
 		while (itF.hasNext()) {
 
