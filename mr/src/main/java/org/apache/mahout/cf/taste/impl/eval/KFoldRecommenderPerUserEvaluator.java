@@ -1,5 +1,6 @@
 package org.apache.mahout.cf.taste.impl.eval;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
@@ -154,12 +155,23 @@ public final class KFoldRecommenderPerUserEvaluator {
 				int numRecommendedItems = 0;
 				int intersectionSize = 0;
 				List<RecommendedItem> recommendedItems = recommender.recommend(userID, at);
+				
+//				List<Long> recItems = new ArrayList<Long>(recommendedItems.size());
+//				List<Long> hits = new ArrayList<Long>(recommendedItems.size());
+				
 				for (RecommendedItem recommendedItem : recommendedItems) {
+					
+//					recItems.add(recommendedItem.getItemID());
+					
 					if (relevantItemIDs.contains(recommendedItem.getItemID())) {
 						intersectionSize++;
+//						hits.add(recommendedItem.getItemID());
 					}
 					numRecommendedItems++;
 				}
+				
+//				log.info("List of recs items : {}", recItems);
+//				log.info("List of hit items : {}", hits);
 
 				// Precision
 				double p = 0;

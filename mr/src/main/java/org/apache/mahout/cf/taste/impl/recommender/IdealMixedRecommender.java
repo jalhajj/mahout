@@ -36,7 +36,7 @@ public class IdealMixedRecommender extends AbstractRecommender {
 		this.builders = builders;
 		this.recs = new ArrayList<Recommender>(builders.size());
 		for (RecommenderBuilder builder : builders) {
-			recs.add(builder.buildRecommender(dataModel));
+			recs.add(builder.buildRecommender(dataModel, strategy));
 		}
 	}
 	
