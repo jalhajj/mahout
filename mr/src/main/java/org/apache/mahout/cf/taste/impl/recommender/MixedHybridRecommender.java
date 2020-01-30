@@ -17,7 +17,6 @@ import org.apache.mahout.cf.taste.impl.common.FullRunningAverage;
 import org.apache.mahout.cf.taste.impl.common.LongPrimitiveIterator;
 import org.apache.mahout.cf.taste.impl.common.RunningAverage;
 import org.apache.mahout.cf.taste.impl.eval.Fold;
-import org.apache.mahout.cf.taste.impl.recommender.MetaRecommender.RecWrapper;
 import org.apache.mahout.cf.taste.model.DataModel;
 import org.apache.mahout.cf.taste.model.PreferenceArray;
 import org.apache.mahout.cf.taste.recommender.CandidateItemsStrategy;
@@ -123,11 +122,7 @@ public class MixedHybridRecommender extends AbstractRecommender {
 			FastByIDMap<PreferenceArray> testPrefs = fold.getTesting();
 			LongPrimitiveIterator it = fold.getUserIDs().iterator();
 
-			List<RecWrapper> theRecs = new ArrayList<RecWrapper>(this.builders.size());
-			for (RecommenderBuilder recommenderBuilder : this.builders) {
-				theRecs.add(new RecWrapper(recommenderBuilder.buildRecommender(trainingModel, fold), 1.0, ""));
-			}
-			MetaRecommender theRecommender = new MetaRecommender(trainingModel, theRecs, this.candidateItemsStrategy);
+			IdealMixedRecommender theRecommender = new IdealMixedRecommender(trainingModel, this.builders, this.candidateItemsStrategy);
 			
 			while (it.hasNext()) {
 

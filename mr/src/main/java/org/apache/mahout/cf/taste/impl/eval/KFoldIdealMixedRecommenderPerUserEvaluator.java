@@ -21,7 +21,7 @@ import org.apache.mahout.cf.taste.impl.common.FastIDSet;
 import org.apache.mahout.cf.taste.impl.common.FullRunningAverage;
 import org.apache.mahout.cf.taste.impl.common.LongPrimitiveIterator;
 import org.apache.mahout.cf.taste.impl.common.RunningAverage;
-import org.apache.mahout.cf.taste.impl.recommender.MetaRecommender;
+import org.apache.mahout.cf.taste.impl.recommender.IdealMixedRecommender;
 import org.apache.mahout.cf.taste.model.DataModel;
 import org.apache.mahout.cf.taste.model.PreferenceArray;
 import org.apache.mahout.cf.taste.recommender.RecommendedItem;
@@ -36,14 +36,14 @@ import org.chocosolver.solver.variables.BoolVar;
 import org.chocosolver.solver.variables.IntVar;
 import org.chocosolver.util.ESat;
 
-public final class KFoldMetaRecommenderPerUserEvaluator {
+public final class KFoldIdealMixedRecommenderPerUserEvaluator {
 
-	private static final Logger log = LoggerFactory.getLogger(KFoldMetaRecommenderPerUserEvaluator.class);
+	private static final Logger log = LoggerFactory.getLogger(KFoldIdealMixedRecommenderPerUserEvaluator.class);
 
 	private final DataModel dataModel;
 	private final FoldDataSplitter folds;
 
-	public KFoldMetaRecommenderPerUserEvaluator(DataModel dataModel, int nbFolds, Random random) throws TasteException {
+	public KFoldIdealMixedRecommenderPerUserEvaluator(DataModel dataModel, int nbFolds, Random random) throws TasteException {
 		Preconditions.checkArgument(dataModel != null, "dataModel is null");
 		Preconditions.checkArgument(nbFolds > 1, "nbFolds must be > 1");
 
@@ -51,7 +51,7 @@ public final class KFoldMetaRecommenderPerUserEvaluator {
 		this.folds = new ChronologicalPerUserDataSplitter(this.dataModel, (double) nbFolds / 100.0);
 	}
 
-	public KFoldMetaRecommenderPerUserEvaluator(DataModel dataModel, FoldDataSplitter splitter) throws TasteException {
+	public KFoldIdealMixedRecommenderPerUserEvaluator(DataModel dataModel, FoldDataSplitter splitter) throws TasteException {
 		Preconditions.checkArgument(dataModel != null, "dataModel is null");
 		Preconditions.checkArgument(splitter != null, "splitter is null");
 
@@ -84,11 +84,11 @@ public final class KFoldMetaRecommenderPerUserEvaluator {
 			LongPrimitiveIterator it = fold.getUserIDs().iterator();
 
 			Recommender theRecommender = recommenderBuilder.buildRecommender(trainingModel, fold);
-			if (!(theRecommender instanceof MetaRecommender)) {
+			if (!(theRecommender instanceof IdealMixedRecommender)) {
 				log.error("KFoldMetaRecommenderPerUserEvaluator: MetaRecommender required");
 				return null;
 			}
-			MetaRecommender recommender = (MetaRecommender) theRecommender;
+			IdealMixedRecommender recommender = (IdealMixedRecommender) theRecommender;
 
 			while (it.hasNext()) {
 
