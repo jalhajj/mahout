@@ -75,6 +75,7 @@ public class ChronologicalPerUserDataSplitter implements FoldDataSplitter {
 		Collections.sort(userPrefs, new ChronologicalPrefComparator(dataModel, userID));
 		
 		int ntrain = (int) (this.trainingPercentage * (float) size);
+		ntrain = Math.max(ntrain, 1); // Always put at least one pref in train
 		
 		List<Preference> train = new ArrayList<Preference>();
 		List<Preference> test = new ArrayList<Preference>();

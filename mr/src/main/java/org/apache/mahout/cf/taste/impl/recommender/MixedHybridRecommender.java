@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Random;
+
 import org.apache.mahout.cf.taste.common.NoSuchUserException;
 import org.apache.mahout.cf.taste.common.Refreshable;
 import org.apache.mahout.cf.taste.common.TasteException;
@@ -77,6 +79,7 @@ public class MixedHybridRecommender extends AbstractRecommender {
 	private final double relevanceThreshold;
 	private final int at;
 	private final int nbFolds;
+	private final Random rand;
 	
 	public MixedHybridRecommender(DataModel dataModel, ArrayList<RecommenderBuilder> builders, long seed, double relevanceThreshold, int at, int nbFolds) throws TasteException {
 		super(dataModel);
@@ -91,6 +94,7 @@ public class MixedHybridRecommender extends AbstractRecommender {
 		this.relevanceThreshold = relevanceThreshold;
 		this.at = at;
 		this.nbFolds = nbFolds;
+		this.rand = new Random(seed);
 		trainBlenders();
 	}
 	
@@ -107,6 +111,7 @@ public class MixedHybridRecommender extends AbstractRecommender {
 		this.relevanceThreshold = relevanceThreshold;
 		this.at = at;
 		this.nbFolds = nbFolds;
+		this.rand = new Random(seed);
 		trainBlenders();
 	}
 	
@@ -145,21 +150,21 @@ public class MixedHybridRecommender extends AbstractRecommender {
 				}
 				
 				// Start to describe opt pb
-				Model model = new Model();
-				BoolVar[][] cutoffs = model.boolVarMatrix("cutoffs", this.nrecs, this.at + 1);
-				IntVar[] allHits = model.intVarArray("allHits", this.nrecs, 0, this.at);
-				IntVar[] allRanks = model.intVarArray("allRanks", this.nrecs, 0, this.at);
+//				Model model = new Model();
+//				BoolVar[][] cutoffs = model.boolVarMatrix("cutoffs", this.nrecs, this.at + 1);
+//				IntVar[] allHits = model.intVarArray("allHits", this.nrecs, 0, this.at);
+//				IntVar[] allRanks = model.intVarArray("allRanks", this.nrecs, 0, this.at);
 				
-				int[] ranks = new int[this.at + 1];
-			    for (int rank = 0; rank <= this.at; rank++) {
-			    	ranks[rank] = rank;
-			    }
-				
-				// Set total number of recs
-			    for (int index = 0; index < this.nrecs; index++) {
-			    	model.scalar(cutoffs[index], ranks, "=", allRanks[index]).post();
-			    }
-			    model.sum(allRanks, "=", this.at).post();
+//				int[] ranks = new int[this.at + 1];
+//			    for (int rank = 0; rank <= this.at; rank++) {
+//			    	ranks[rank] = rank;
+//			    }
+//				
+//				// Set total number of recs
+//			    for (int index = 0; index < this.nrecs; index++) {
+//			    	model.scalar(cutoffs[index], ranks, "=", allRanks[index]).post();
+//			    }
+//			    model.sum(allRanks, "=", this.at).post();
 				
 
 				FastIDSet relevantItemIDs = new FastIDSet(prefs.length());
@@ -190,7 +195,7 @@ public class MixedHybridRecommender extends AbstractRecommender {
 					int[] hits = new int[this.at + 1];
 					
 					// Constraint of only one cutoff to choose per algo
-					model.sum(cutoffs[index], "=", 1).post();
+//					model.sum(cutoffs[index], "=", 1).post();
 					
 					int thisIntersection = 0;
 					int rank = 0;
@@ -203,48 +208,51 @@ public class MixedHybridRecommender extends AbstractRecommender {
 						}
 						seen.add(itemID);
 						hits[rank] = thisIntersection;
+						
+						blender.add(index, thisIntersection);
+						
 						rank++;
 					}
 					
 					// Fill to at with last value if not enough values (less recs than asked for)
-					if (rank != this.at + 1) {
-						for (int k = rank; k <= this.at; k++) {
-							hits[k] = thisIntersection;
-						}
-					}
+//					if (rank != this.at + 1) {
+//						for (int k = rank; k <= this.at; k++) {
+//							hits[k] = thisIntersection;
+//						}
+//					}
 					
 					// Set hit value for this algo in function of the cutoff variables
-					model.scalar(cutoffs[index], hits, "=", allHits[index]).post();
+//					model.scalar(cutoffs[index], hits, "=", allHits[index]).post();
 					
 					
 					index++;
 				}
 				
 				// Objective function
-				IntVar OBJ = model.intVar("objective", 0, this.nrecs * this.at);
-				model.sum(allHits, "=", OBJ).post();
-				model.setObjective(Model.MAXIMIZE, OBJ);
-				
-				// Solve
-				if(model.getSolver().solve()) {
-					
-				    for (index = 0; index < this.nrecs; index++) {
-				    	int rank;
-				    	for (rank = 0; rank <= this.at; rank++) {
-				    		if (cutoffs[index][rank].getBooleanValue() == ESat.eval(true)) {
-				    			break;
-				    		}
-				    	}
-				    	double prop = (double) rank / (double) this.at;
-				    	blender.add(index, prop);
-				    }
-				    
-				} else {
-					log.warn("LP could not be solved");
-					for (index = 0; index < this.nrecs; index++) {
-						blender.add(index, 0);
-				    }
-				}
+//				IntVar OBJ = model.intVar("objective", 0, this.nrecs * this.at);
+//				model.sum(allHits, "=", OBJ).post();
+//				model.setObjective(Model.MAXIMIZE, OBJ);
+//				
+//				// Solve
+//				if(model.getSolver().solve()) {
+//					
+//				    for (index = 0; index < this.nrecs; index++) {
+//				    	int rank;
+//				    	for (rank = 0; rank <= this.at; rank++) {
+//				    		if (cutoffs[index][rank].getBooleanValue() == ESat.eval(true)) {
+//				    			break;
+//				    		}
+//				    	}
+//				    	double prop = (double) rank / (double) this.at;
+//				    	blender.add(index, prop);
+//				    }
+//				    
+//				} else {
+//					log.warn("LP could not be solved");
+//					for (index = 0; index < this.nrecs; index++) {
+//						blender.add(index, 0);
+//				    }
+//				}
 				
 			}
 		}
@@ -275,7 +283,7 @@ public class MixedHybridRecommender extends AbstractRecommender {
 					howRealMany = 0;
 				}
 			} else {
-				howRealMany = (int) ((float) blender.get(idx) * (float) howMany);
+				howRealMany = (int) blender.get(idx); //(int) ((float) blender.get(idx) * (float) howMany);
 			}
 			howManies.add(howRealMany);
 			if (howRealMany > max) {
@@ -288,29 +296,37 @@ public class MixedHybridRecommender extends AbstractRecommender {
 			howManies.set(idMax, max + howMany - sum);
 		}
 		
-		int idx = 0;
-		
-//		return this.recs.get(idMax).recommend(userID, howMany, rescorer, includeKnownItems);
-		for (Recommender rec : this.recs) {
-			
-			List<RecommendedItem> l = rec.recommend(userID, howMany, rescorer, includeKnownItems);
-			
-			int k = 0;
-			for (RecommendedItem item : l) {
-				if (k >= howManies.get(idx)) {
-					break;
-				} else {
-					if (!ids.contains(item.getItemID())) {
-						recommendations.add(item);
-						ids.add(item.getItemID());
-						k++;
-					}
-				}
+		List<Integer> indexes = new ArrayList<Integer>(howMany);
+		for (int idx = 0; idx < this.nrecs; idx++) {
+			for (int k = 0; k < howManies.get(idx); k++) {
+				indexes.add(idx);
 			}
-			idx++;
 		}
-		assert(recommendations.size() <= howMany);
-		return recommendations;
+		int randomIdx = indexes.get(this.rand.nextInt(indexes.size()));
+		
+		return this.recs.get(randomIdx).recommend(userID, howMany, rescorer, includeKnownItems);
+		
+//		int idx = 0;
+//		for (Recommender rec : this.recs) {
+//			
+//			List<RecommendedItem> l = rec.recommend(userID, howMany, rescorer, includeKnownItems);
+//			
+//			int k = 0;
+//			for (RecommendedItem item : l) {
+//				if (k >= howManies.get(idx)) {
+//					break;
+//				} else {
+//					if (!ids.contains(item.getItemID())) {
+//						recommendations.add(item);
+//						ids.add(item.getItemID());
+//						k++;
+//					}
+//				}
+//			}
+//			idx++;
+//		}
+//		assert(recommendations.size() <= howMany);
+//		return recommendations;
 	}
 
 	@Override

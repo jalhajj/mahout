@@ -87,6 +87,10 @@ public final class KFoldRecommenderPerUserEvaluator {
 
 				long userID = it.nextLong();
 				
+//				if (userID != 453) {
+//					continue;
+//				}
+				
 				PreferenceArray prefs = testPrefs.get(userID);
 				if (prefs == null || prefs.length() == 0) {
 					log.debug("Ignoring user {}", userID);
