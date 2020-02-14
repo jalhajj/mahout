@@ -2,6 +2,8 @@ package org.apache.mahout.cf.taste.impl.recommender;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
@@ -37,36 +39,70 @@ import org.chocosolver.util.ESat;
 public class MixedHybridRecommender extends AbstractRecommender {
 	
 	private static final Logger log = LoggerFactory.getLogger(MixedHybridRecommender.class);
-
-	static class UserBlender {
+	
+	class BlenderStats {
 		
-		private final ArrayList<RunningAverage> gains;
+		private int hits;
+		private int bestRank;
+		private final int idx;
 		
-		UserBlender(int nbAlgos) {
-			this.gains = new ArrayList<RunningAverage>(nbAlgos);
-			for (int i = 0; i < nbAlgos; i++) {
-				this.gains.add(new FullRunningAverage());
+		BlenderStats(int idx) {
+			this.hits = 0;
+			this.bestRank = Integer.MAX_VALUE;
+			this.idx = idx;
+		}
+		
+		void add(int rank) {
+			this.hits++;
+			if (rank < this.bestRank) {
+				this.bestRank = rank;
 			}
-		}
-		
-		double getTotal() {
-			double totalGain = 0.0;
-			for (RunningAverage avg : this.gains) {
-				totalGain += avg.getAverage();
-			}
-			return totalGain;
-		}
-		
-		double get(int idx) {
-			return this.gains.get(idx).getAverage();
-		}
-		
-		void add(int idx, double value) {
-			this.gains.get(idx).addDatum(value);
 		}
 		
 		public String toString() {
-			return gains.toString();
+			return String.format("{ %d (%d) }", this.hits, this.bestRank);
+		}
+	}
+	
+	class BlenderStatsComparator implements Comparator<BlenderStats> {
+
+		@Override
+		public int compare(BlenderStats s1, BlenderStats s2) {
+			int x = Integer.compare(s1.hits, s2.hits);
+			if (x == 0) {
+				x = -Integer.compare(s1.bestRank, s2.bestRank);
+			}
+			return -x;
+		}
+		
+	}
+
+	class UserBlender {
+		
+		private final ArrayList<BlenderStats> stats;
+		
+		UserBlender(int nbAlgos) {
+			this.stats = new ArrayList<BlenderStats>(nbAlgos);
+			for (int i = 0; i < nbAlgos; i++) {
+				this.stats.add(new BlenderStats(i));
+			}
+		}
+		
+		int getBestIdx() {
+			List<BlenderStats> toSort = new ArrayList<BlenderStats>(this.stats.size());
+			for (BlenderStats e : this.stats) {
+				toSort.add(e);
+			}
+			toSort.sort(new BlenderStatsComparator());
+			return toSort.get(0).idx;
+		}
+		
+		void add(int idx, int rank) {
+			this.stats.get(idx).add(rank);
+		}
+		
+		public String toString() {
+			return this.stats.toString();
 		}
 		
 	}
@@ -81,6 +117,8 @@ public class MixedHybridRecommender extends AbstractRecommender {
 	private final int nbFolds;
 	private final Random rand;
 	
+	private List<Integer> stats = new ArrayList<Integer>();
+	
 	public MixedHybridRecommender(DataModel dataModel, ArrayList<RecommenderBuilder> builders, long seed, double relevanceThreshold, int at, int nbFolds) throws TasteException {
 		super(dataModel);
 		this.builders = builders;
@@ -94,7 +132,7 @@ public class MixedHybridRecommender extends AbstractRecommender {
 		this.relevanceThreshold = relevanceThreshold;
 		this.at = at;
 		this.nbFolds = nbFolds;
-		this.rand = new Random(seed);
+		this.rand = new Random(this.seed);
 		trainBlenders();
 	}
 	
@@ -111,11 +149,15 @@ public class MixedHybridRecommender extends AbstractRecommender {
 		this.relevanceThreshold = relevanceThreshold;
 		this.at = at;
 		this.nbFolds = nbFolds;
-		this.rand = new Random(seed);
+		this.rand = new Random(this.seed);
 		trainBlenders();
 	}
 	
 	private void trainBlenders() throws TasteException {
+		
+		for (int l = 0; l <= this.nrecs; l++) {
+			this.stats.add(0);
+		}
 		
 		FoldDataSplitter folds = new ChronologicalPerUserDataSplitter(this.getDataModel(), (double) this.nbFolds / 100);
 		Iterator<Fold> itF = folds.getFolds();
@@ -188,28 +230,27 @@ public class MixedHybridRecommender extends AbstractRecommender {
 				List<List<RecommendedItem>> recommendedLists = theRecommender.recommendSeperately(userID, this.at, null, false);
 				int index = 0;
 				
-				FastIDSet seen = new FastIDSet();
+//				FastIDSet seen = new FastIDSet();
 				
 				for (List<RecommendedItem> recommendedList : recommendedLists) {
 					
-					int[] hits = new int[this.at + 1];
+//					int[] hits = new int[this.at + 1];
 					
 					// Constraint of only one cutoff to choose per algo
 //					model.sum(cutoffs[index], "=", 1).post();
 					
-					int thisIntersection = 0;
+//					int thisIntersection = 0;
 					int rank = 0;
-					hits[rank] = thisIntersection;
+//					hits[rank] = thisIntersection;
 					rank++;
 					for (RecommendedItem recommendedItem : recommendedList) {
 						long itemID = recommendedItem.getItemID();
-						if (relevantItemIDs.contains(itemID) && !seen.contains(itemID)) {
-							thisIntersection++;
+						if (relevantItemIDs.contains(itemID)) {
+							blender.add(index, rank);
+//							thisIntersection++;
 						}
-						seen.add(itemID);
-						hits[rank] = thisIntersection;
-						
-						blender.add(index, thisIntersection);
+//						seen.add(itemID);
+//						hits[rank] = thisIntersection;
 						
 						rank++;
 					}
@@ -262,49 +303,61 @@ public class MixedHybridRecommender extends AbstractRecommender {
 	public List<RecommendedItem> recommend(long userID, int howMany, IDRescorer rescorer, boolean includeKnownItems)
 			throws TasteException {
 		
-		List<RecommendedItem> recommendations = new ArrayList<RecommendedItem>();
-		List<Long> ids = new ArrayList<Long>();
+//		List<RecommendedItem> recommendations = new ArrayList<RecommendedItem>();
+//		List<Long> ids = new ArrayList<Long>();
 		
 		boolean defaultBlender = false;
 		UserBlender blender = this.userBlenders.get(userID);
-		if (blender == null || blender.getTotal() <= 0.0) {
+		if (blender == null) {
 			// No hit for all algorithms in validation set, so uniform combination
 			defaultBlender = true;
+			this.stats.set(this.nrecs, this.stats.get(this.nrecs) + 1); // Count for default
 		}
 		
-		List<Integer> howManies = new ArrayList<Integer>(this.nrecs);
-		int idMax = 0, max = -1, sum = 0;
-		for (int idx = 0; idx < this.nrecs; idx++) {
-			int howRealMany = 0;
-			if (defaultBlender) {
-				if (idx == 0) {
-					howRealMany = howMany;
-				} else {
-					howRealMany = 0;
-				}
-			} else {
-				howRealMany = (int) blender.get(idx); //(int) ((float) blender.get(idx) * (float) howMany);
-			}
-			howManies.add(howRealMany);
-			if (howRealMany > max) {
-				max = howRealMany;
-				idMax = idx;
-			}
-			sum += howRealMany;
-		}
-		if (sum < howMany) {
-			howManies.set(idMax, max + howMany - sum);
+		int idxRec = 0;
+		if (!defaultBlender) {
+			idxRec = blender.getBestIdx();
 		}
 		
-		List<Integer> indexes = new ArrayList<Integer>(howMany);
-		for (int idx = 0; idx < this.nrecs; idx++) {
-			for (int k = 0; k < howManies.get(idx); k++) {
-				indexes.add(idx);
-			}
-		}
-		int randomIdx = indexes.get(this.rand.nextInt(indexes.size()));
+//		List<Integer> howManies = new ArrayList<Integer>(this.nrecs);
+//		int idMax = 0, max = -1, sum = 0;
+//		for (int idx = 0; idx < this.nrecs; idx++) {
+//			int howRealMany = 0;
+//			if (defaultBlender) {
+//				if (idx == 0) {
+//					howRealMany = howMany;
+//				} else {
+//					howRealMany = 0;
+//				}
+//			} else {
+//				howRealMany = (int) blender.get(idx); //(int) ((float) blender.get(idx) * (float) howMany);
+//			}
+//			howManies.add(howRealMany);
+//			if (howRealMany > max) {
+//				max = howRealMany;
+//				idMax = idx;
+//			}
+//			sum += howRealMany;
+//		}
+//		if (sum < howMany) {
+//			howManies.set(idMax, max + howMany - sum);
+//		}
+//		
+//		List<Integer> indexes = new ArrayList<Integer>(howMany);
+//		for (int idx = 0; idx < this.nrecs; idx++) {
+//			for (int k = 0; k < howManies.get(idx); k++) {
+//				indexes.add(idx);
+//			}
+//		}
+//		int randomIdx = indexes.get(this.rand.nextInt(indexes.size()));
 		
-		return this.recs.get(randomIdx).recommend(userID, howMany, rescorer, includeKnownItems);
+		this.stats.set(idxRec, this.stats.get(idxRec) + 1);
+		
+		if (userID > 935) {
+			log.info("Distribution: {}", this.stats);
+		}
+		
+		return this.recs.get(idxRec).recommend(userID, howMany, rescorer, includeKnownItems);
 		
 //		int idx = 0;
 //		for (Recommender rec : this.recs) {

@@ -94,8 +94,12 @@ public class ChronologicalDataSplitter implements FoldDataSplitter {
 			}
 		}
 
-		training.put(userID, new GenericUserPreferenceArray(train));
-		testing.put(userID, new GenericUserPreferenceArray(test));
+		if (!train.isEmpty()) {
+			training.put(userID, new GenericUserPreferenceArray(train));
+		}
+		if (!test.isEmpty()) {
+			testing.put(userID, new GenericUserPreferenceArray(test));
+		}
 
 	}
 	
