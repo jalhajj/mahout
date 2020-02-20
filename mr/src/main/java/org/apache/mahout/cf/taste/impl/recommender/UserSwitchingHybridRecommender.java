@@ -2,6 +2,7 @@ package org.apache.mahout.cf.taste.impl.recommender;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
@@ -70,15 +71,26 @@ public class UserSwitchingHybridRecommender extends AbstractRecommender {
 	class UserBlender {
 		
 		private final ArrayList<BlenderStats> stats;
+		private Integer bestIndex;
 		
 		UserBlender(int nbAlgos) {
 			this.stats = new ArrayList<BlenderStats>(nbAlgos);
 			for (int i = 0; i < nbAlgos; i++) {
 				this.stats.add(new BlenderStats(i));
 			}
+			bestIndex = null;
 		}
 		
-		int getBestIdx() {
+		int getAttribution() {
+			try {
+				return this.bestIndex;
+			} catch (NullPointerException ex) {
+				log.error("getAttribution: tried to get best index but training not done, returning 0");
+				return 0;
+			}
+		}
+		
+		private int getBestIdx() {
 			List<BlenderStats> toSort = new ArrayList<BlenderStats>(this.stats.size());
 			for (BlenderStats e : this.stats) {
 				toSort.add(e);
@@ -89,6 +101,37 @@ public class UserSwitchingHybridRecommender extends AbstractRecommender {
 		
 		void incrWithRank(int idx, int rank) {
 			this.stats.get(idx).incrWithRank(rank);
+		}
+		
+		void doneTraining(AlgAttributionStats s) {
+			this.bestIndex = getBestIdx();
+			s.incr(this.bestIndex);
+		}
+		
+		public String toString() {
+			return this.stats.toString();
+		}
+		
+	}
+	
+	class AlgAttributionStats {
+		
+		private final ArrayList<Integer> stats;
+		
+		AlgAttributionStats(int nbAlgos) {
+			this.stats = new ArrayList<Integer>(nbAlgos);
+			for (int i = 0; i < nbAlgos; i++) {
+				this.stats.add(0);
+			}
+		}
+		
+		void incr(int idx) {
+			this.stats.set(idx, this.stats.get(idx) + 1);
+		}
+		
+		int getBest() {
+			int max = Collections.max(this.stats);
+			return this.stats.indexOf(max);
 		}
 		
 		public String toString() {
@@ -105,6 +148,7 @@ public class UserSwitchingHybridRecommender extends AbstractRecommender {
 	private final double relevanceThreshold;
 	private final int at;
 	private final int nbFolds;
+	private final AlgAttributionStats algAttributionStats;
 	
 	public UserSwitchingHybridRecommender(DataModel dataModel, ArrayList<RecommenderBuilder> builders, long seed, double relevanceThreshold, int at, int nbFolds) throws TasteException {
 		super(dataModel);
@@ -119,6 +163,7 @@ public class UserSwitchingHybridRecommender extends AbstractRecommender {
 		this.relevanceThreshold = relevanceThreshold;
 		this.at = at;
 		this.nbFolds = nbFolds;
+		this.algAttributionStats = new AlgAttributionStats(this.nrecs);
 		trainBlenders();
 	}
 	
@@ -135,6 +180,7 @@ public class UserSwitchingHybridRecommender extends AbstractRecommender {
 		this.relevanceThreshold = relevanceThreshold;
 		this.at = at;
 		this.nbFolds = nbFolds;
+		this.algAttributionStats = new AlgAttributionStats(this.nrecs);
 		trainBlenders();
 	}
 	
@@ -161,12 +207,6 @@ public class UserSwitchingHybridRecommender extends AbstractRecommender {
 					continue; // Oops we excluded all prefs for the user -- just move on
 				}
 				
-				UserBlender blender = this.userBlenders.get(userID);
-				if (blender == null) {
-					blender = new UserBlender(this.nrecs);
-					this.userBlenders.put(userID, blender);	
-				}
-				
 				try {
 					theRecommender.getCandidateItems(userID);
 				} catch (NoSuchUserException nsue) {
@@ -190,26 +230,32 @@ public class UserSwitchingHybridRecommender extends AbstractRecommender {
 				} catch (NoSuchUserException nsee) {
 					continue; // Oops we excluded all prefs for the user -- just move on
 				}
+				
+				UserBlender blender = this.userBlenders.get(userID);
+				if (blender == null) {
+					blender = new UserBlender(this.nrecs);
+					this.userBlenders.put(userID, blender);	
+				}
 
 				List<List<RecommendedItem>> recommendedLists = theRecommender.recommendSeperately(userID, this.at, null, false);
 				int index = 0;
 				
 				for (List<RecommendedItem> recommendedList : recommendedLists) {
-//					int thisIntersection = 0;
 					int rank = 0;
 					rank++;
 					for (RecommendedItem recommendedItem : recommendedList) {
 						long itemID = recommendedItem.getItemID();
 						if (relevantItemIDs.contains(itemID)) {
 							blender.incrWithRank(index, rank);
-//							thisIntersection++;
 						}
 						rank++;
 					}
 					index++;
 				}
+				blender.doneTraining(this.algAttributionStats);
 			}
 		}
+		log.info("Attribution stats: {}", this.algAttributionStats);
 	}
 
 	@Override
@@ -219,13 +265,14 @@ public class UserSwitchingHybridRecommender extends AbstractRecommender {
 		boolean defaultBlender = false;
 		UserBlender blender = this.userBlenders.get(userID);
 		if (blender == null) {
-			// No hit for all algorithms in validation set, so uniform combination
 			defaultBlender = true;
 		}
 		
-		int idxRec = 0;
+		int idxRec;
 		if (!defaultBlender) {
-			idxRec = blender.getBestIdx();
+			idxRec = blender.getAttribution();
+		} else {
+			idxRec = this.algAttributionStats.getBest();
 		}
 		
 		return this.recs.get(idxRec).recommend(userID, howMany, rescorer, includeKnownItems);
