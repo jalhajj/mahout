@@ -144,7 +144,7 @@ public final class MostRatedRecommender extends AbstractRecommender {
   
   @Override
   public String toString() {
-    return "MostRatedRecommender";
+	  return "MostRatedRecommender";
   }
   
   private final class Estimator implements TopItems.Estimator<Long> {
@@ -154,7 +154,12 @@ public final class MostRatedRecommender extends AbstractRecommender {
     
     @Override
     public double estimate(Long itemID) {
-      return itemCounts.get(itemID).get();
+    	Counter counter = itemCounts.get(itemID);
+      if (counter == null) {
+    	  return 0;
+      } else {
+    	  return counter.get();
+      }
     }
   }
   
