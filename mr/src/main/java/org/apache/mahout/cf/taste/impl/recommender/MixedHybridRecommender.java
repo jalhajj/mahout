@@ -116,6 +116,7 @@ public class MixedHybridRecommender extends AbstractRecommender {
 	private final int at;
 	private final int nbFolds;
 	private final Random rand;
+	private final CandidateItemsStrategy strategy;
 	
 	private List<Integer> stats = new ArrayList<Integer>();
 	
@@ -123,9 +124,11 @@ public class MixedHybridRecommender extends AbstractRecommender {
 		super(dataModel);
 		this.builders = builders;
 		this.recs = new ArrayList<Recommender>(builders.size());
+		
 		for (RecommenderBuilder builder : builders) {
 			recs.add(builder.buildRecommender(dataModel));
 		}
+		
 		this.nrecs = builders.size();
 		this.userBlenders = new FastByIDMap<UserBlender>();
 		this.seed = seed;
@@ -133,6 +136,7 @@ public class MixedHybridRecommender extends AbstractRecommender {
 		this.at = at;
 		this.nbFolds = nbFolds;
 		this.rand = new Random(this.seed);
+		this.strategy = null;
 		trainBlenders();
 	}
 	
@@ -140,9 +144,11 @@ public class MixedHybridRecommender extends AbstractRecommender {
 		super(dataModel, strategy);
 		this.builders = builders;
 		this.recs = new ArrayList<Recommender>(builders.size());
+		
 		for (RecommenderBuilder builder : builders) {
 			recs.add(builder.buildRecommender(dataModel, strategy));
 		}
+		
 		this.nrecs = builders.size();
 		this.userBlenders = new FastByIDMap<UserBlender>();
 		this.seed = seed;
@@ -150,6 +156,7 @@ public class MixedHybridRecommender extends AbstractRecommender {
 		this.at = at;
 		this.nbFolds = nbFolds;
 		this.rand = new Random(this.seed);
+		this.strategy = strategy;
 		trainBlenders();
 	}
 	
@@ -166,6 +173,17 @@ public class MixedHybridRecommender extends AbstractRecommender {
 			Fold fold = itF.next();
 
 			DataModel trainingModel = fold.getTraining();
+			
+//			if (this.strategy == null) {
+//				for (RecommenderBuilder builder : this.builders) {
+//					recs.add(builder.buildRecommender(trainingModel));
+//				}
+//			} else {
+//				for (RecommenderBuilder builder : this.builders) {
+//					recs.add(builder.buildRecommender(trainingModel, this.strategy));
+//				}
+//			}
+			
 			FastByIDMap<PreferenceArray> testPrefs = fold.getTesting();
 			LongPrimitiveIterator it = fold.getUserIDs().iterator();
 

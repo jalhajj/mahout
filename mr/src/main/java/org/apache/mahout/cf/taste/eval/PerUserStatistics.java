@@ -12,6 +12,7 @@ public interface PerUserStatistics {
   double getRecall(long userID);
   double getNormalizedDiscountedCumulativeGain(long userID);
   double getOther(long userID);
+  String getMisc(long userID);
   List<Double> getHitsFrom(long userID);
   void addRMSE(long userID, double rmse);
   void addMAE(long userID, double mae);
@@ -20,6 +21,7 @@ public interface PerUserStatistics {
   void addNDCG(long userID, double ndcg);
   void addOther(long userID, double other);
   void addHitsFrom(long userID, List<Double> hits);
+  void addMisc(long userID, String str);
   LongPrimitiveIterator getUserIDs();
   
 }
