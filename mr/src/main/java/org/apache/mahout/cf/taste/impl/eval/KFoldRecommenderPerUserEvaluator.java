@@ -67,6 +67,7 @@ public final class KFoldRecommenderPerUserEvaluator {
 		FastByIDMap<RunningAverage> precision = new FastByIDMap<RunningAverage>(n);
 		FastByIDMap<RunningAverage> recall = new FastByIDMap<RunningAverage>(n);
 		FastByIDMap<RunningAverage> ndcg = new FastByIDMap<RunningAverage>(n);
+		RunningAverage icov = new FullRunningAverage();
 		
 		Iterator<Fold> itF = this.folds.getFolds();
 		while (itF.hasNext()) {
@@ -78,6 +79,8 @@ public final class KFoldRecommenderPerUserEvaluator {
 			LongPrimitiveIterator it = fold.getUserIDs().iterator();
 
 			Recommender recommender = recommenderBuilder.buildRecommender(trainingModel, fold);
+			
+			FastIDSet itemsRecommended = new FastIDSet();
 
 			while (it.hasNext()) {
 				
@@ -167,6 +170,8 @@ public final class KFoldRecommenderPerUserEvaluator {
 					
 //					recItems.add(recommendedItem.getItemID());
 					
+					itemsRecommended.add(recommendedItem.getItemID());
+					
 					if (relevantItemIDs.contains(recommendedItem.getItemID())) {
 						intersectionSize++;
 //						hits.add(recommendedItem.getItemID());
@@ -176,7 +181,7 @@ public final class KFoldRecommenderPerUserEvaluator {
 				
 //				log.info("List of recs items : {}", recItems);
 //				log.info("List of hit items : {}", hits);
-
+				
 				// Precision
 				double p = 0;
 				if (numRecommendedItems > 0) {
@@ -226,6 +231,10 @@ public final class KFoldRecommenderPerUserEvaluator {
 				}
 
 			}
+			
+			// Item coverage
+			double cov = (double) itemsRecommended.size() / (double) trainingModel.getNumItems();
+			icov.addDatum(cov);
 
 		}
 
@@ -261,6 +270,8 @@ public final class KFoldRecommenderPerUserEvaluator {
 			long userID = it.nextLong();
 			results.addNDCG(userID, ndcg.get(userID).getAverage());
 		}
+		
+		results.addItemCoverage(icov.getAverage());
 		
 		return results;
 	}

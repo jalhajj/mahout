@@ -16,6 +16,7 @@ public class PerUserStatisticsImpl implements PerUserStatistics {
 	private final FastByIDMap<Double> ndcg;
 	private final FastByIDMap<List<Double>> hitsFrom;
 	private final FastByIDMap<String> misc;
+	private double icov;
 	private final FastIDSet userIDs;
 	
 	private final FastByIDMap<Double> otherStat;
@@ -29,7 +30,7 @@ public class PerUserStatisticsImpl implements PerUserStatistics {
 		this.hitsFrom = new FastByIDMap<List<Double>>(numUsers);
 		this.misc = new FastByIDMap<String>(numUsers);
 		this.userIDs = new FastIDSet(numUsers);
-		
+		this.icov = Double.NaN;
 		this.otherStat = new FastByIDMap<Double>(numUsers);
 	}
 
@@ -141,6 +142,16 @@ public class PerUserStatisticsImpl implements PerUserStatistics {
 	public void addMisc(long userID, String str) {
 		this.misc.put(userID, str);
 		this.userIDs.add(userID);
+	}
+
+	@Override
+	public double getItemCoverage() {
+		return this.icov;
+	}
+
+	@Override
+	public void addItemCoverage(double icov) {
+		this.icov = icov;
 	}
 
 }
