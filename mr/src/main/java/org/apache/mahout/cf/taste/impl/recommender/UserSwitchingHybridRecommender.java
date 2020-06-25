@@ -70,6 +70,8 @@ public class UserSwitchingHybridRecommender extends AbstractRecommender {
 
 	class UserBlender {
 		
+		private int DEFAULT_TO_SET = -47575;
+		
 		private final ArrayList<BlenderStats> stats;
 		private Integer bestIndex;
 		
@@ -79,6 +81,23 @@ public class UserSwitchingHybridRecommender extends AbstractRecommender {
 				this.stats.add(new BlenderStats(i));
 			}
 			bestIndex = null;
+		}
+		
+		boolean checkIfBestEnough(int threshold) {
+			int first = Integer.MIN_VALUE;
+			int second = Integer.MIN_VALUE;
+			for (BlenderStats e : this.stats) {
+				int n = e.hits;
+				if (n > first) {
+					second = first;
+					first = n;
+				} else {
+					if (n > second) {
+						second = n;
+					}
+				}
+			}
+			return first >= (second + threshold);
 		}
 		
 		int getAttribution() {
@@ -103,9 +122,19 @@ public class UserSwitchingHybridRecommender extends AbstractRecommender {
 			this.stats.get(idx).incrWithRank(rank);
 		}
 		
-		void doneTraining(AlgAttributionStats s) {
-			this.bestIndex = getBestIdx();
-			s.incr(this.bestIndex);
+		void doneTraining(AlgAttributionStats s, int threshold) {
+			if (checkIfBestEnough(threshold)) {	
+				this.bestIndex = getBestIdx();
+				s.incr(this.bestIndex);
+			} else {
+				this.bestIndex = DEFAULT_TO_SET;
+			}
+		}
+		
+		void checkReallyDone(AlgAttributionStats s) {
+			if (this.bestIndex == DEFAULT_TO_SET) {
+				this.bestIndex = s.getBest();
+			}
 		}
 		
 		public String toString() {
@@ -148,9 +177,10 @@ public class UserSwitchingHybridRecommender extends AbstractRecommender {
 	private final double relevanceThreshold;
 	private final int at;
 	private final int nbFolds;
+	private final int bestThreshold;
 	private final AlgAttributionStats algAttributionStats;
 	
-	public UserSwitchingHybridRecommender(DataModel dataModel, ArrayList<RecommenderBuilder> builders, long seed, double relevanceThreshold, int at, int nbFolds) throws TasteException {
+	public UserSwitchingHybridRecommender(DataModel dataModel, ArrayList<RecommenderBuilder> builders, long seed, double relevanceThreshold, int at, int nbFolds, int bestThreshold) throws TasteException {
 		super(dataModel);
 		this.builders = builders;
 		this.recs = new ArrayList<Recommender>(builders.size());
@@ -163,11 +193,12 @@ public class UserSwitchingHybridRecommender extends AbstractRecommender {
 		this.relevanceThreshold = relevanceThreshold;
 		this.at = at;
 		this.nbFolds = nbFolds;
+		this.bestThreshold = bestThreshold;
 		this.algAttributionStats = new AlgAttributionStats(this.nrecs);
 		trainBlenders();
 	}
 	
-	public UserSwitchingHybridRecommender(DataModel dataModel, ArrayList<RecommenderBuilder> builders, long seed, double relevanceThreshold, int at, int nbFolds, CandidateItemsStrategy strategy) throws TasteException {
+	public UserSwitchingHybridRecommender(DataModel dataModel, ArrayList<RecommenderBuilder> builders, long seed, double relevanceThreshold, int at, int nbFolds, int bestThreshold, CandidateItemsStrategy strategy) throws TasteException {
 		super(dataModel, strategy);
 		this.builders = builders;
 		this.recs = new ArrayList<Recommender>(builders.size());
@@ -180,6 +211,7 @@ public class UserSwitchingHybridRecommender extends AbstractRecommender {
 		this.relevanceThreshold = relevanceThreshold;
 		this.at = at;
 		this.nbFolds = nbFolds;
+		this.bestThreshold = bestThreshold;
 		this.algAttributionStats = new AlgAttributionStats(this.nrecs);
 		trainBlenders();
 	}
@@ -252,7 +284,14 @@ public class UserSwitchingHybridRecommender extends AbstractRecommender {
 					}
 					index++;
 				}
-				blender.doneTraining(this.algAttributionStats);
+				blender.doneTraining(this.algAttributionStats, this.bestThreshold);
+			}
+			
+			it = fold.getUserIDs().iterator();
+			while (it.hasNext()) {
+				long userID = it.nextLong();				
+				UserBlender blender = this.userBlenders.get(userID);
+				blender.checkReallyDone(this.algAttributionStats);
 			}
 		}
 		log.info("Attribution stats: {}", this.algAttributionStats);
