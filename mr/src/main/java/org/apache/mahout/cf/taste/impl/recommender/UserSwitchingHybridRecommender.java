@@ -291,7 +291,9 @@ public class UserSwitchingHybridRecommender extends AbstractRecommender {
 			while (it.hasNext()) {
 				long userID = it.nextLong();				
 				UserBlender blender = this.userBlenders.get(userID);
-				blender.checkReallyDone(this.algAttributionStats);
+				if (blender != null) {	
+					blender.checkReallyDone(this.algAttributionStats);
+				}
 			}
 		}
 		log.info("Attribution stats: {}", this.algAttributionStats);
