@@ -20,6 +20,7 @@ import org.apache.mahout.cf.taste.impl.model.GenericUserPreferenceArray;
 import org.apache.mahout.cf.taste.impl.recommender.svd.RatingSGDFactorizer;
 import org.apache.mahout.cf.taste.impl.recommender.svd.SVDRecommender;
 import org.apache.mahout.cf.taste.impl.similarity.PearsonCorrelationSimilarity;
+import org.apache.mahout.cf.taste.impl.neighborhood.NearestNUserNeighborhood;
 import org.apache.mahout.cf.taste.model.DataModel;
 import org.apache.mahout.cf.taste.model.PreferenceArray;
 import org.apache.mahout.cf.taste.neighborhood.UserBiclusterNeighborhood;
@@ -29,6 +30,9 @@ import org.apache.mahout.cf.taste.recommender.RecommendedItem;
 import org.apache.mahout.cf.taste.recommender.Recommender;
 import org.apache.mahout.cf.taste.similarity.ItemSimilarity;
 import org.apache.mahout.cf.taste.similarity.UserBiclusterSimilarity;
+import org.apache.mahout.cf.taste.similarity.UserSimilarity;
+import org.apache.mahout.cf.taste.impl.similarity.UncenteredCosineSimilarity;
+import org.apache.mahout.cf.taste.neighborhood.UserNeighborhood;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,9 +47,14 @@ public class BBCFRecommender extends AbstractRecommender {
 	private final RefreshHelper refreshHelper;
 	private FastByIDMap<Recommender> subrecs;
 	private Recommender backup;
+	//added the property combineWithMF 09-07
+	private Recommender backupUBKK;
+	private boolean combineWithMF;
+	private boolean combineWithUBKK;
 
-	public BBCFRecommender(DataModel dataModel, UserBiclusterNeighborhood neighborhood,
-			UserBiclusterSimilarity similarity) throws TasteException {
+	 public BBCFRecommender(DataModel dataModel, UserBiclusterNeighborhood neighborhood, UserBiclusterSimilarity similarity) throws TasteException {
+	   
+
 		super(dataModel);
 		Preconditions.checkArgument(neighborhood != null, "neighborhood is null");
 		this.neighborhood = neighborhood;
@@ -66,14 +75,20 @@ public class BBCFRecommender extends AbstractRecommender {
 		refreshHelper.addDependency(neighborhood);
 		this.backup = new SVDRecommender(dataModel, new RatingSGDFactorizer(dataModel, 18, 30),
 				this.candidateItemsStrategy);
+		UserSimilarity simi = new UncenteredCosineSimilarity(dataModel);
+		UserNeighborhood neighborhoodBackup = new NearestNUserNeighborhood(50, simi, dataModel);	
+		this.backupUBKK = new GenericUserBasedRecommender(dataModel,neighborhoodBackup,simi);
 	}
 
 	public BBCFRecommender(DataModel dataModel, UserBiclusterNeighborhood neighborhood,
-			UserBiclusterSimilarity similarity, CandidateItemsStrategy strategy) throws TasteException {
+			UserBiclusterSimilarity similarity, CandidateItemsStrategy strategy, boolean combineWithMF, boolean combineWithUBKK) throws TasteException {
 		super(dataModel, strategy);
 		Preconditions.checkArgument(neighborhood != null, "neighborhood is null");
 		this.neighborhood = neighborhood;
 		this.similarity = similarity;
+		//added 09-07 for combining BBCF with MF/UBKK
+		this.combineWithMF = combineWithMF;
+		this.combineWithUBKK = combineWithUBKK;
 		try {
 			this.subrecs = new FastByIDMap<Recommender>(dataModel.getNumUsers());
 		} catch (TasteException e) {
@@ -90,6 +105,11 @@ public class BBCFRecommender extends AbstractRecommender {
 		refreshHelper.addDependency(neighborhood);
 		this.backup = new SVDRecommender(dataModel, new RatingSGDFactorizer(dataModel, 18, 30),
 				this.candidateItemsStrategy);
+
+		UserSimilarity simi = new UncenteredCosineSimilarity(dataModel);
+		UserNeighborhood neighborhoodBackup = new NearestNUserNeighborhood(50, simi, dataModel);	
+		this.backupUBKK = new GenericUserBasedRecommender(dataModel,neighborhoodBackup,simi);
+
 	}
 
 	public UserBiclusterSimilarity getSimilarity() {
@@ -97,8 +117,7 @@ public class BBCFRecommender extends AbstractRecommender {
 	}
 
 	@Override
-	public List<RecommendedItem> recommend(long userID, int howMany, IDRescorer rescorer, boolean includeKnownItems)
-			throws TasteException {
+	public List<RecommendedItem> recommend(long userID, int howMany, IDRescorer rescorer, boolean includeKnownItems) throws TasteException {
 		Preconditions.checkArgument(howMany >= 0, "howMany must be at least 0");
 
 		log.debug("Recommending items for user ID '{}'", userID);
@@ -113,18 +132,30 @@ public class BBCFRecommender extends AbstractRecommender {
 		if (rec != null) {
 			try {
 				List<RecommendedItem> l = rec.recommend(userID, howMany, rescorer, includeKnownItems);
-				if (l.size() < howMany) {
+				// changed 09-07
+				if((combineWithMF && l.size() < howMany)||(combineWithUBKK && l.size() < howMany))
+				{
 					return addBackupRecommendations(userID, howMany, rescorer, includeKnownItems, l);
-				} else {
+				} 
 					return l;
-				}
+				
 			} catch (NoSuchUserException nsue) {
-				return addBackupRecommendations(userID, howMany, rescorer, includeKnownItems, Collections.<RecommendedItem>emptyList());
-			} catch (NoSuchItemException nsie) {
-				return addBackupRecommendations(userID, howMany, rescorer, includeKnownItems, Collections.<RecommendedItem>emptyList());
+				if(combineWithMF || combineWithUBKK)
+				{
+					return addBackupRecommendations(userID, howMany, rescorer, includeKnownItems, Collections.<RecommendedItem>emptyList());
+				}
+				return Collections.emptyList();
+			} catch (NoSuchItemException nsie) 
+			{
+				if(combineWithMF || combineWithUBKK)
+				{
+					return addBackupRecommendations(userID, howMany, rescorer, includeKnownItems, Collections.<RecommendedItem>emptyList());
+				}
+				return Collections.emptyList();
 			}
 		} else {
-			return addBackupRecommendations(userID, howMany, rescorer, includeKnownItems, Collections.<RecommendedItem>emptyList());
+			//return addBackupRecommendations(userID, howMany, rescorer, includeKnownItems, Collections.<RecommendedItem>emptyList());
+			return Collections.emptyList();
 		}
 	}
 
@@ -208,6 +239,10 @@ public class BBCFRecommender extends AbstractRecommender {
 		int missing = howMany - l.size();
 		List<RecommendedItem> recommendations = new ArrayList<RecommendedItem>(howMany);
 		List<RecommendedItem> more = this.backup.recommend(userID, missing, rescorer, includeKnownItems);
+		if(combineWithUBKK)
+		{
+			more  = this.backupUBKK.recommend(userID, missing, rescorer, includeKnownItems);
+		}
 		for (RecommendedItem item : more) {
 			long itemID = item.getItemID();
 			boolean found = false;
